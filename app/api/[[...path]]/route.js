@@ -148,6 +148,28 @@ function genRef() {
   for (let i = 0; i < 6; i++) out += s[Math.floor(Math.random() * s.length)]
   return 'YBS-' + out
 }
+function genCode(prefix) {
+  const s = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let out = ''
+  for (let i = 0; i < 4; i++) out += s[Math.floor(Math.random() * s.length)]
+  return prefix + '-' + out
+}
+async function logActivity(db, agentId, type, detail, meta = {}) {
+  await db.collection('activities').insertOne({ id: uuidv4(), agentId, type, detail, meta, createdAt: new Date() })
+}
+function normRooms(rooms, fallbackBase) {
+  let list = Array.isArray(rooms) ? rooms.filter((r) => r && r.name) : []
+  if (list.length === 0) {
+    list = [{ name: 'Chambre Standard', nameEn: 'Standard Room', priceCDF: fallbackBase || 100000, capacity: 2, beds: '1 lit double', bedsEn: '1 double bed' }]
+  }
+  return list.map((r) => ({
+    id: r.id || uuidv4(),
+    name: r.name, nameEn: r.nameEn || r.name,
+    priceCDF: Math.max(1, parseInt(r.priceCDF) || fallbackBase || 100000),
+    capacity: parseInt(r.capacity) || 2,
+    beds: r.beds || '1 lit double', bedsEn: r.bedsEn || r.beds || '1 double bed',
+  }))
+}
 
 // ---------------- Router ----------------
 async function handleRoute(request, { params }) {
@@ -241,6 +263,93 @@ async function handleRoute(request, { params }) {
       const review = { id: uuidv4(), hotelId: body.hotelId, author: body.author, rating: Math.max(1, Math.min(5, body.rating)), comment: body.comment || '', createdAt: new Date() }
       await db.collection('reviews').insertOne({ ...review })
       return handleCORS(NextResponse.json(review))
+    }
+
+    // ---------------- Agents ----------------
+    if (route === '/agents/login' && method === 'POST') {
+      const body = await request.json()
+      if (!body.email || !body.name) return handleCORS(NextResponse.json({ error: 'name and email are required' }, { status: 400 }))
+      let agent = await db.collection('agents').findOne({ email: body.email.toLowerCase() })
+      if (!agent) {
+        agent = { id: uuidv4(), name: body.name, email: body.email.toLowerCase(), code: genCode('AG'), zone: body.zone || 'Kinshasa', createdAt: new Date() }
+        await db.collection('agents').insertOne({ ...agent })
+        await logActivity(db, agent.id, 'agent_registered', `Agent ${agent.name} enregistré`, { zone: agent.zone })
+      }
+      const { _id, ...rest } = agent
+      return handleCORS(NextResponse.json(rest))
+    }
+    if (path[0] === 'agents' && path[1] && path[2] === 'hotels' && method === 'GET') {
+      const hotels = await db.collection('hotels').find({ agentId: path[1] }).sort({ createdAt: -1 }).toArray()
+      return handleCORS(NextResponse.json(clean(hotels)))
+    }
+    if (path[0] === 'agents' && path[1] && path[2] === 'activities' && method === 'GET') {
+      const acts = await db.collection('activities').find({ agentId: path[1] }).sort({ createdAt: -1 }).limit(100).toArray()
+      return handleCORS(NextResponse.json(clean(acts)))
+    }
+    if (path[0] === 'agents' && path[1] && path[2] === 'stats' && method === 'GET') {
+      const hotels = await db.collection('hotels').find({ agentId: path[1] }).toArray()
+      const activities = await db.collection('activities').countDocuments({ agentId: path[1] })
+      const rooms = hotels.reduce((n, h) => n + (h.rooms ? h.rooms.length : 0), 0)
+      return handleCORS(NextResponse.json({ properties: hotels.length, verified: hotels.filter((h) => h.verified).length, rooms, activities }))
+    }
+    if (path[0] === 'agents' && path[1] && !path[2] && method === 'GET') {
+      const agent = await db.collection('agents').findOne({ id: path[1] })
+      if (!agent) return handleCORS(NextResponse.json({ error: 'Agent not found' }, { status: 404 }))
+      const { _id, ...rest } = agent
+      return handleCORS(NextResponse.json(rest))
+    }
+
+    // ---------------- Property management (agents) ----------------
+    if (route === '/hotels' && method === 'POST') {
+      const body = await request.json()
+      if (!body.name || !body.city || !body.province || !body.country || !body.agentId) {
+        return handleCORS(NextResponse.json({ error: 'name, city, province, country and agentId are required' }, { status: 400 }))
+      }
+      const rooms = normRooms(body.rooms, parseInt(body.priceCDF))
+      const minPrice = Math.min(...rooms.map((r) => r.priceCDF))
+      const images = Array.isArray(body.images) && body.images.length ? body.images : ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
+      const hotel = {
+        id: uuidv4(),
+        name: body.name, type: body.type || 'hotel', city: body.city, province: body.province, country: body.country,
+        region: body.region || 'Afrique Centrale',
+        priceCDF: minPrice, verified: false, featured: false,
+        lat: parseFloat(body.lat) || 0, lng: parseFloat(body.lng) || 0,
+        images, description: body.description || '', descriptionEn: body.descriptionEn || body.description || '',
+        amenities: Array.isArray(body.amenities) ? body.amenities : [], rooms,
+        rating: 0, reviewCount: 0,
+        agentId: body.agentId, createdAt: new Date(),
+      }
+      await db.collection('hotels').insertOne({ ...hotel })
+      await logActivity(db, body.agentId, 'property_created', `Propriété ajoutée : ${hotel.name} (${hotel.city})`, { hotelId: hotel.id })
+      return handleCORS(NextResponse.json(hotel))
+    }
+    if (path[0] === 'hotels' && path[1] && path[2] === 'verify' && method === 'POST') {
+      const body = await request.json()
+      const hotel = await db.collection('hotels').findOne({ id: path[1] })
+      if (!hotel) return handleCORS(NextResponse.json({ error: 'Hotel not found' }, { status: 404 }))
+      const verification = { agentId: body.agentId || hotel.agentId, lat: parseFloat(body.lat) || hotel.lat, lng: parseFloat(body.lng) || hotel.lng, at: new Date() }
+      await db.collection('hotels').updateOne({ id: path[1] }, { $set: { verified: true, verification, lat: verification.lat, lng: verification.lng } })
+      await logActivity(db, verification.agentId, 'property_verified', `Propriété vérifiée (GPS) : ${hotel.name}`, { hotelId: hotel.id, lat: verification.lat, lng: verification.lng })
+      const updated = await db.collection('hotels').findOne({ id: path[1] })
+      const { _id, ...rest } = updated
+      return handleCORS(NextResponse.json(rest))
+    }
+    if (path[0] === 'hotels' && path[1] && !path[2] && method === 'PUT') {
+      const body = await request.json()
+      const hotel = await db.collection('hotels').findOne({ id: path[1] })
+      if (!hotel) return handleCORS(NextResponse.json({ error: 'Hotel not found' }, { status: 404 }))
+      const upd = {}
+      for (const f of ['name', 'type', 'city', 'province', 'country', 'region', 'description', 'descriptionEn']) {
+        if (typeof body[f] === 'string') upd[f] = body[f]
+      }
+      if (Array.isArray(body.amenities)) upd.amenities = body.amenities
+      if (Array.isArray(body.images) && body.images.length) upd.images = body.images
+      if (Array.isArray(body.rooms)) { upd.rooms = normRooms(body.rooms, hotel.priceCDF); upd.priceCDF = Math.min(...upd.rooms.map((r) => r.priceCDF)) }
+      await db.collection('hotels').updateOne({ id: path[1] }, { $set: upd })
+      await logActivity(db, body.agentId || hotel.agentId, 'property_updated', `Propriété mise à jour : ${hotel.name}`, { hotelId: hotel.id })
+      const updated = await db.collection('hotels').findOne({ id: path[1] })
+      const { _id, ...rest } = updated
+      return handleCORS(NextResponse.json(rest))
     }
 
     // Create booking

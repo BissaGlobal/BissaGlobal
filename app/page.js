@@ -7,13 +7,17 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import {
   Wifi, Waves, Utensils, Car, Snowflake, Sparkles, Dumbbell, Wine, Plane, Coffee,
   Star, MapPin, Search, Heart, Moon, Sun, Check, ShieldCheck, Phone, Calendar as CalIcon,
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
+  Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -102,6 +106,442 @@ const STATUS_FLOW = [
 ]
 
 function fmtDateInput(d) { return d.toISOString().split('T')[0] }
+
+/* ----------------------------- Agent module data ----------------------------- */
+const DRC_PROVINCES = [
+  'Kinshasa', 'Kongo Central', 'Kwango', 'Kwilu', 'Mai-Ndombe', 'Kasaï', 'Kasaï Central', 'Kasaï Oriental',
+  'Lomami', 'Sankuru', 'Maniema', 'Nord-Kivu', 'Sud-Kivu', 'Ituri', 'Haut-Uélé', 'Bas-Uélé', 'Tshopo',
+  'Mongala', 'Nord-Ubangi', 'Sud-Ubangi', 'Équateur', 'Tshuapa', 'Tanganyika', 'Haut-Lomami', 'Lualaba', 'Haut-Katanga',
+]
+const REGIONS = ['Afrique Centrale', "Afrique de l'Est", "Afrique de l'Ouest", 'Afrique Australe', 'Îles Africaines']
+const TYPE_KEYS = ['hotel', 'apartment', 'villa', 'resort', 'lodge', 'guesthouse', 'residence']
+
+const AT = {
+  fr: {
+    space: 'Espace Agent YABISO', login_sub: 'Connectez-vous pour gérer vos propriétés sur le terrain.',
+    name: 'Nom complet', email: 'Email', zone: 'Zone', login: 'Accéder à mon espace',
+    welcome: 'Bonjour', logout: 'Déconnexion', overview: "Vue d'ensemble", my_props: 'Mes propriétés',
+    add_prop: 'Ajouter une propriété', activity: "Rapports d'activité",
+    s_props: 'Propriétés', s_verified: 'Vérifiées', s_rooms: 'Chambres', s_acts: 'Activités',
+    no_props: "Aucune propriété pour le moment. Ajoutez votre première propriété !",
+    verified: 'Vérifié par YABISO', not_verified: 'Non vérifié', verify_gps: 'Vérifier (GPS)',
+    add_room: 'Ajouter une chambre', room_name: 'Nom de la chambre', price_cdf: 'Prix / nuit (CDF)',
+    capacity: 'Capacité', beds: 'Lits', save: 'Enregistrer', cancel: 'Annuler',
+    prop_name: "Nom de l'établissement", type: 'Type', country: 'Pays', province: 'Province / Région', city: 'Ville',
+    region_zone: 'Zone Afrique', description: 'Description', amenities: 'Équipements',
+    gps: 'Localisation GPS', capture_gps: 'Capturer ma position GPS', lat: 'Latitude', lng: 'Longitude',
+    photos: 'Photos', upload: 'Télécharger des photos', add_url: 'Ajouter par URL', rooms: 'Chambres',
+    add_room_row: 'Ajouter une chambre', create: 'Créer la propriété', creating: 'Création...',
+    no_acts: 'Aucune activité enregistrée.', verified_done: 'Propriété vérifiée !',
+    created_done: 'Propriété créée avec succès !', back_site: 'Retour au site',
+  },
+  en: {
+    space: 'YABISO Agent Space', login_sub: 'Log in to manage your properties in the field.',
+    name: 'Full name', email: 'Email', zone: 'Zone', login: 'Enter my space',
+    welcome: 'Hello', logout: 'Logout', overview: 'Overview', my_props: 'My properties',
+    add_prop: 'Add a property', activity: 'Field activity reports',
+    s_props: 'Properties', s_verified: 'Verified', s_rooms: 'Rooms', s_acts: 'Activities',
+    no_props: 'No property yet. Add your first property!',
+    verified: 'Verified by YABISO', not_verified: 'Not verified', verify_gps: 'Verify (GPS)',
+    add_room: 'Add a room', room_name: 'Room name', price_cdf: 'Price / night (CDF)',
+    capacity: 'Capacity', beds: 'Beds', save: 'Save', cancel: 'Cancel',
+    prop_name: 'Property name', type: 'Type', country: 'Country', province: 'Province / Region', city: 'City',
+    region_zone: 'Africa zone', description: 'Description', amenities: 'Amenities',
+    gps: 'GPS location', capture_gps: 'Capture my GPS position', lat: 'Latitude', lng: 'Longitude',
+    photos: 'Photos', upload: 'Upload photos', add_url: 'Add by URL', rooms: 'Rooms',
+    add_room_row: 'Add a room', create: 'Create property', creating: 'Creating...',
+    no_acts: 'No activity recorded.', verified_done: 'Property verified!',
+    created_done: 'Property created successfully!', back_site: 'Back to site',
+  },
+}
+
+const ACT_LABEL = {
+  agent_registered: { fr: 'Inscription agent', en: 'Agent registered', icon: UserCog },
+  property_created: { fr: 'Propriété créée', en: 'Property created', icon: Plus },
+  property_verified: { fr: 'Propriété vérifiée', en: 'Property verified', icon: ShieldCheck },
+  property_updated: { fr: 'Propriété mise à jour', en: 'Property updated', icon: Building2 },
+}
+
+function resizeImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new window.Image()
+      img.onload = () => {
+        const max = 1000
+        let { width, height } = img
+        if (width > max) { height = Math.round(height * (max / width)); width = max }
+        const canvas = document.createElement('canvas')
+        canvas.width = width; canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.7))
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+const fmtCDF = (n) => (n || 0).toLocaleString('fr-FR') + ' FC'
+
+/* ----------------------------- Agent Module ----------------------------- */
+function AgentModule({ lang, onBack }) {
+  const at = (k) => AT[lang][k]
+  const typeLabel = (ty) => T[lang].types[ty] || ty
+  const [agent, setAgent] = useState(null)
+  const [tab, setTab] = useState('overview')
+  const [loginForm, setLoginForm] = useState({ name: '', email: '', zone: 'Kinshasa' })
+  const [busy, setBusy] = useState(false)
+  const [stats, setStats] = useState({ properties: 0, verified: 0, rooms: 0, activities: 0 })
+  const [props, setProps] = useState([])
+  const [acts, setActs] = useState([])
+
+  useEffect(() => {
+    try { const s = localStorage.getItem('yabiso_agent'); if (s) setAgent(JSON.parse(s)) } catch (e) {}
+  }, [])
+
+  const refresh = useCallback(async (id) => {
+    try {
+      const [s, h, a] = await Promise.all([
+        fetch('/api/agents/' + id + '/stats').then((r) => r.json()),
+        fetch('/api/agents/' + id + '/hotels').then((r) => r.json()),
+        fetch('/api/agents/' + id + '/activities').then((r) => r.json()),
+      ])
+      setStats(s); setProps(Array.isArray(h) ? h : []); setActs(Array.isArray(a) ? a : [])
+    } catch (e) { console.error(e) }
+  }, [])
+
+  useEffect(() => { if (agent) refresh(agent.id) }, [agent, refresh])
+
+  const doLogin = async () => {
+    if (!loginForm.name || !loginForm.email) { toast.error(lang === 'fr' ? 'Nom et email requis' : 'Name and email required'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/agents/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
+      const a = await r.json()
+      if (a.error) throw new Error(a.error)
+      setAgent(a); localStorage.setItem('yabiso_agent', JSON.stringify(a))
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+  const logout = () => { localStorage.removeItem('yabiso_agent'); setAgent(null) }
+
+  const verifyProp = (h) => {
+    const send = (lat, lng) => {
+      fetch('/api/hotels/' + h.id + '/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId: agent.id, lat, lng }) })
+        .then((r) => r.json()).then(() => { toast.success(at('verified_done')); refresh(agent.id) })
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => send(pos.coords.latitude, pos.coords.longitude),
+        () => { toast.message(lang === 'fr' ? 'GPS indisponible, vérification avec coordonnées connues' : 'GPS unavailable, verifying with known coords'); send(h.lat, h.lng) },
+        { timeout: 8000 }
+      )
+    } else { send(h.lat, h.lng) }
+  }
+
+  /* ---- Login screen ---- */
+  if (!agent) {
+    return (
+      <main className="container py-16 max-w-md">
+        <button onClick={onBack} className="text-sm text-muted-foreground hover:text-primary mb-6 flex items-center gap-1"><ArrowRight className="h-3.5 w-3.5 rotate-180" />{at('back_site')}</button>
+        <Card className="p-8 border">
+          <div className="text-center mb-6">
+            <div className="mx-auto mb-3 h-14 w-14 rounded-2xl bg-primary text-primary-foreground grid place-items-center"><UserCog className="h-7 w-7" /></div>
+            <h1 className="text-2xl font-extrabold">{at('space')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{at('login_sub')}</p>
+          </div>
+          <div className="space-y-3">
+            <div><Label>{at('name')}</Label><Input value={loginForm.name} onChange={(e) => setLoginForm({ ...loginForm, name: e.target.value })} className="mt-1" /></div>
+            <div><Label>{at('email')}</Label><Input type="email" value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="mt-1" /></div>
+            <div><Label>{at('zone')}</Label>
+              <Select value={loginForm.zone} onValueChange={(v) => setLoginForm({ ...loginForm, zone: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-60">{DRC_PROVINCES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <Button onClick={doLogin} disabled={busy} className="w-full h-11 font-semibold gap-2">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCog className="h-4 w-4" />}{at('login')}</Button>
+          </div>
+        </Card>
+      </main>
+    )
+  }
+
+  /* ---- Dashboard ---- */
+  return (
+    <main className="container py-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-2"><LayoutDashboard className="h-7 w-7 text-primary" />{at('space')}</h1>
+          <p className="text-muted-foreground text-sm">{at('welcome')} {agent.name} · {agent.code} · {agent.zone}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onBack} className="gap-1"><Globe className="h-4 w-4" />{at('back_site')}</Button>
+          <Button variant="outline" onClick={logout} className="gap-1"><LogOut className="h-4 w-4" />{at('logout')}</Button>
+        </div>
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-6 flex-wrap h-auto">
+          <TabsTrigger value="overview" className="gap-1"><LayoutDashboard className="h-4 w-4" />{at('overview')}</TabsTrigger>
+          <TabsTrigger value="properties" className="gap-1"><Building2 className="h-4 w-4" />{at('my_props')}</TabsTrigger>
+          <TabsTrigger value="add" className="gap-1"><Plus className="h-4 w-4" />{at('add_prop')}</TabsTrigger>
+          <TabsTrigger value="activity" className="gap-1"><ClipboardList className="h-4 w-4" />{at('activity')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { l: at('s_props'), v: stats.properties, i: Building2 },
+              { l: at('s_verified'), v: stats.verified, i: ShieldCheck },
+              { l: at('s_rooms'), v: stats.rooms, i: LayoutDashboard },
+              { l: at('s_acts'), v: stats.activities, i: Activity },
+            ].map((c, i) => (
+              <Card key={i} className="p-5 border">
+                <div className="flex items-center justify-between">
+                  <div className="text-3xl font-extrabold text-primary">{c.v}</div>
+                  <c.i className="h-8 w-8 text-primary/30" />
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">{c.l}</div>
+              </Card>
+            ))}
+          </div>
+          <Card className="p-6 border mt-6">
+            <h3 className="font-bold mb-2">YABISO Field Agent</h3>
+            <p className="text-sm text-muted-foreground">{lang === 'fr' ? "En tant qu'agent terrain, vous visitez les hôtels, prenez les photos, vérifiez la localisation GPS et créez les comptes. Les propriétés vérifiées reçoivent le badge \u00ab Vérifié par YABISO \u00bb." : 'As a field agent, you visit hotels, take photos, verify GPS location and create accounts. Verified properties receive the "Verified by YABISO" badge.'}</p>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="properties">
+          {props.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground">{at('no_props')}</div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {props.map((h) => <AgentPropertyCard key={h.id} h={h} lang={lang} at={at} typeLabel={typeLabel} onVerify={() => verifyProp(h)} onRoomAdded={() => refresh(agent.id)} agentId={agent.id} />)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="add">
+          <AddPropertyForm lang={lang} at={at} typeLabel={typeLabel} agentId={agent.id} onCreated={() => { toast.success(at('created_done')); refresh(agent.id); setTab('properties') }} />
+        </TabsContent>
+
+        <TabsContent value="activity">
+          {acts.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground">{at('no_acts')}</div>
+          ) : (
+            <div className="space-y-3">
+              {acts.map((a) => { const meta = ACT_LABEL[a.type] || { fr: a.type, en: a.type, icon: Activity }; const Ic = meta.icon; return (
+                <Card key={a.id} className="p-4 border flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0"><Ic className="h-4 w-4" /></div>
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{a.detail}</div>
+                    <div className="text-xs text-muted-foreground">{meta[lang]} · {new Date(a.createdAt).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB')}</div>
+                  </div>
+                  {a.meta && a.meta.lat ? <Badge variant="outline" className="gap-1 text-xs"><MapPin className="h-3 w-3" />{Number(a.meta.lat).toFixed(3)}, {Number(a.meta.lng).toFixed(3)}</Badge> : null}
+                </Card>
+              ) })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
+}
+
+/* ---- Agent property card (with add-room) ---- */
+function AgentPropertyCard({ h, lang, at, typeLabel, onVerify, onRoomAdded, agentId }) {
+  const [open, setOpen] = useState(false)
+  const [room, setRoom] = useState({ name: '', priceCDF: '', capacity: 2, beds: '' })
+  const [busy, setBusy] = useState(false)
+  const addRoom = async () => {
+    if (!room.name || !room.priceCDF) { toast.error(lang === 'fr' ? 'Nom et prix requis' : 'Name and price required'); return }
+    setBusy(true)
+    try {
+      const rooms = [...(h.rooms || []), { name: room.name, priceCDF: parseInt(room.priceCDF), capacity: parseInt(room.capacity) || 2, beds: room.beds || '1 lit double' }]
+      await fetch('/api/hotels/' + h.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rooms, agentId }) })
+      setRoom({ name: '', priceCDF: '', capacity: 2, beds: '' }); setOpen(false); onRoomAdded()
+      toast.success(lang === 'fr' ? 'Chambre ajoutée' : 'Room added')
+    } catch (e) { toast.error(String(e)) } finally { setBusy(false) }
+  }
+  return (
+    <Card className="border overflow-hidden">
+      <div className="flex">
+        <img src={h.images[0]} alt="" className="h-32 w-32 object-cover shrink-0" />
+        <div className="p-4 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-bold leading-tight">{h.name}</div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{h.city}, {h.province}</div>
+            </div>
+            {h.verified
+              ? <Badge className="bg-[#0057B8] text-white gap-1 hover:bg-[#0057B8] shrink-0"><BadgeCheck className="h-3 w-3" />{at('verified')}</Badge>
+              : <Badge variant="outline" className="shrink-0 text-muted-foreground">{at('not_verified')}</Badge>}
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">{typeLabel(h.type)} · {h.rooms?.length || 0} {at('rooms').toLowerCase()} · {fmtCDF(h.priceCDF)}</div>
+          <div className="flex gap-2 mt-3">
+            {!h.verified && <Button size="sm" className="gap-1 h-8" onClick={onVerify}><Locate className="h-3.5 w-3.5" />{at('verify_gps')}</Button>}
+            <Button size="sm" variant="outline" className="gap-1 h-8" onClick={() => setOpen((o) => !o)}><Plus className="h-3.5 w-3.5" />{at('add_room')}</Button>
+          </div>
+        </div>
+      </div>
+      {open && (
+        <div className="border-t p-4 bg-muted/30 grid gap-2 sm:grid-cols-2">
+          <Input placeholder={at('room_name')} value={room.name} onChange={(e) => setRoom({ ...room, name: e.target.value })} />
+          <Input type="number" placeholder={at('price_cdf')} value={room.priceCDF} onChange={(e) => setRoom({ ...room, priceCDF: e.target.value })} />
+          <Input type="number" placeholder={at('capacity')} value={room.capacity} onChange={(e) => setRoom({ ...room, capacity: e.target.value })} />
+          <Input placeholder={at('beds')} value={room.beds} onChange={(e) => setRoom({ ...room, beds: e.target.value })} />
+          <div className="sm:col-span-2 flex gap-2">
+            <Button size="sm" onClick={addRoom} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : at('save')}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>{at('cancel')}</Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ---- Add property form ---- */
+function AddPropertyForm({ lang, at, typeLabel, agentId, onCreated }) {
+  const [f, setF] = useState({ name: '', type: 'hotel', country: 'RD Congo', province: 'Kinshasa', city: '', region: 'Afrique Centrale', description: '' })
+  const [amenities, setAmenities] = useState([])
+  const [rooms, setRooms] = useState([{ name: 'Chambre Standard', priceCDF: '120000', capacity: 2, beds: '1 lit double' }])
+  const [images, setImages] = useState([])
+  const [urlInput, setUrlInput] = useState('')
+  const [coords, setCoords] = useState({ lat: '', lng: '' })
+  const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+
+  const toggleAm = (k) => setAmenities((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k])
+  const captureGps = () => {
+    if (!navigator.geolocation) { toast.error('GPS indisponible'); return }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setCoords({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) }); toast.success(lang === 'fr' ? 'Position capturée' : 'Position captured') },
+      () => toast.error(lang === 'fr' ? "Impossible d'obtenir la position. Saisissez manuellement." : 'Unable to get position. Enter manually.'),
+      { timeout: 8000 }
+    )
+  }
+  const onFiles = async (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 6)
+    if (!files.length) return
+    setUploading(true)
+    try { const data = await Promise.all(files.map(resizeImage)); setImages((im) => [...im, ...data]) } catch (err) { toast.error(String(err)) } finally { setUploading(false) }
+  }
+  const addUrl = () => { if (urlInput.trim()) { setImages((im) => [...im, urlInput.trim()]); setUrlInput('') } }
+  const setRoom = (i, key, val) => setRooms((rs) => rs.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
+  const addRoomRow = () => setRooms((rs) => [...rs, { name: '', priceCDF: '', capacity: 2, beds: '' }])
+  const rmRoom = (i) => setRooms((rs) => rs.filter((_, idx) => idx !== i))
+
+  const submit = async () => {
+    if (!f.name || !f.city) { toast.error(lang === 'fr' ? "Nom et ville requis" : 'Name and city required'); return }
+    setBusy(true)
+    try {
+      const body = { ...f, agentId, amenities, images, lat: coords.lat, lng: coords.lng, rooms: rooms.map((r) => ({ ...r, priceCDF: parseInt(r.priceCDF) || 0 })) }
+      const r = await fetch('/api/hotels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await r.json()
+      if (data.error) throw new Error(data.error)
+      setF({ name: '', type: 'hotel', country: 'RD Congo', province: 'Kinshasa', city: '', region: 'Afrique Centrale', description: '' })
+      setAmenities([]); setImages([]); setCoords({ lat: '', lng: '' }); setRooms([{ name: 'Chambre Standard', priceCDF: '120000', capacity: 2, beds: '1 lit double' }])
+      onCreated()
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="p-5 border">
+          <h3 className="font-bold mb-3">{at('add_prop')}</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2"><Label>{at('prop_name')}</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1" /></div>
+            <div><Label>{at('type')}</Label>
+              <Select value={f.type} onValueChange={(v) => setF({ ...f, type: v })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>{TYPE_KEYS.map((k) => <SelectItem key={k} value={k}>{typeLabel(k)}</SelectItem>)}</SelectContent></Select>
+            </div>
+            <div><Label>{at('region_zone')}</Label>
+              <Select value={f.region} onValueChange={(v) => setF({ ...f, region: v })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>{REGIONS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent></Select>
+            </div>
+            <div><Label>{at('country')}</Label><Input value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })} className="mt-1" /></div>
+            <div><Label>{at('province')}</Label>
+              {f.country === 'RD Congo'
+                ? <Select value={f.province} onValueChange={(v) => setF({ ...f, province: v })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent className="max-h-60">{DRC_PROVINCES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                : <Input value={f.province} onChange={(e) => setF({ ...f, province: e.target.value })} className="mt-1" />}
+            </div>
+            <div className="sm:col-span-2"><Label>{at('city')}</Label><Input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} className="mt-1" /></div>
+            <div className="sm:col-span-2"><Label>{at('description')}</Label><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="mt-1" rows={3} /></div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border">
+          <h3 className="font-bold mb-3">{at('amenities')}</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {Object.entries(AMENITIES).map(([k, m]) => (
+              <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={amenities.includes(k)} onCheckedChange={() => toggleAm(k)} />
+                <m.icon className="h-4 w-4 text-primary" />{m[lang]}
+              </label>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5 border">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold">{at('rooms')}</h3>
+            <Button size="sm" variant="outline" onClick={addRoomRow} className="gap-1"><Plus className="h-3.5 w-3.5" />{at('add_room_row')}</Button>
+          </div>
+          <div className="space-y-3">
+            {rooms.map((r, i) => (
+              <div key={i} className="grid gap-2 sm:grid-cols-12 items-end border rounded-lg p-3">
+                <div className="sm:col-span-4"><Label className="text-xs">{at('room_name')}</Label><Input value={r.name} onChange={(e) => setRoom(i, 'name', e.target.value)} className="mt-1 h-9" /></div>
+                <div className="sm:col-span-3"><Label className="text-xs">{at('price_cdf')}</Label><Input type="number" value={r.priceCDF} onChange={(e) => setRoom(i, 'priceCDF', e.target.value)} className="mt-1 h-9" /></div>
+                <div className="sm:col-span-2"><Label className="text-xs">{at('capacity')}</Label><Input type="number" value={r.capacity} onChange={(e) => setRoom(i, 'capacity', e.target.value)} className="mt-1 h-9" /></div>
+                <div className="sm:col-span-2"><Label className="text-xs">{at('beds')}</Label><Input value={r.beds} onChange={(e) => setRoom(i, 'beds', e.target.value)} className="mt-1 h-9" /></div>
+                <div className="sm:col-span-1">{rooms.length > 1 && <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => rmRoom(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="lg:col-span-1 space-y-6">
+        <Card className="p-5 border">
+          <h3 className="font-bold mb-3 flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />{at('gps')}</h3>
+          <Button variant="outline" className="w-full gap-2 mb-3" onClick={captureGps}><Locate className="h-4 w-4" />{at('capture_gps')}</Button>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">{at('lat')}</Label><Input value={coords.lat} onChange={(e) => setCoords({ ...coords, lat: e.target.value })} className="mt-1 h-9" /></div>
+            <div><Label className="text-xs">{at('lng')}</Label><Input value={coords.lng} onChange={(e) => setCoords({ ...coords, lng: e.target.value })} className="mt-1 h-9" /></div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border">
+          <h3 className="font-bold mb-3 flex items-center gap-2"><Camera className="h-4 w-4 text-primary" />{at('photos')}</h3>
+          <label className="block">
+            <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/40 transition">
+              {uploading ? <Loader2 className="h-6 w-6 mx-auto animate-spin text-primary" /> : <ImageIcon className="h-6 w-6 mx-auto text-muted-foreground" />}
+              <div className="text-sm text-muted-foreground mt-1">{at('upload')}</div>
+            </div>
+            <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} />
+          </label>
+          <div className="flex gap-2 mt-3">
+            <Input placeholder="https://..." value={urlInput} onChange={(e) => setUrlInput(e.target.value)} className="h-9" />
+            <Button size="sm" variant="outline" onClick={addUrl}>{at('add_url')}</Button>
+          </div>
+          {images.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              {images.map((src, i) => (
+                <div key={i} className="relative group">
+                  <img src={src} alt="" className="h-16 w-full object-cover rounded" />
+                  <button onClick={() => setImages((im) => im.filter((_, idx) => idx !== i))} className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100"><X className="h-3 w-3" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Button onClick={submit} disabled={busy} className="w-full h-11 font-semibold gap-2">{busy ? <><Loader2 className="h-4 w-4 animate-spin" />{at('creating')}</> : <><Plus className="h-4 w-4" />{at('create')}</>}</Button>
+      </div>
+    </div>
+  )
+}
 
 /* =============================== APP =============================== */
 function App() {
@@ -201,6 +641,7 @@ function App() {
           <button onClick={() => { goto('home'); loadHotels() }} className="hover:text-primary transition">{t('nav_home')}</button>
           <button onClick={() => goto('search')} className="hover:text-primary transition">{t('nav_destinations')}</button>
           <button onClick={() => goto('partner')} className="hover:text-primary transition">{t('nav_partner')}</button>
+          <button onClick={() => goto('agent')} className="hover:text-primary transition flex items-center gap-1"><UserCog className="h-4 w-4" />Espace Agent</button>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -761,6 +1202,7 @@ function App() {
       {view === 'booking' && <BookingView />}
       {view === 'confirmation' && <ConfirmationView />}
       {view === 'partner' && <PartnerView />}
+      {view === 'agent' && <AgentModule lang={lang} onBack={() => { goto('home'); loadHotels() }} />}
       <Footer />
     </div>
   )

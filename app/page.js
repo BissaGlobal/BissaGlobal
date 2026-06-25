@@ -12,12 +12,15 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import {
   Wifi, Waves, Utensils, Car, Snowflake, Sparkles, Dumbbell, Wine, Plane, Coffee,
   Star, MapPin, Search, Heart, Moon, Sun, Check, ShieldCheck, Phone, Calendar as CalIcon,
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
+  User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -652,6 +655,244 @@ function ImportPanel({ lang, at, agentId, onImported }) {
   )
 }
 
+/* ---- Auth dialog (login/register) ---- */
+function AuthDialog({ open, onOpenChange, lang, onSuccess }) {
+  const [mode, setMode] = useState('login')
+  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!form.email || !form.password || (mode === 'register' && !form.name)) { toast.error(lang === 'fr' ? 'Champs requis manquants' : 'Missing required fields'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/auth/' + mode, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const data = await r.json()
+      if (data.error) throw new Error(data.error)
+      onSuccess(data)
+      setForm({ name: '', email: '', password: '' })
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground grid place-items-center font-extrabold">Y</div>{mode === 'login' ? (lang === 'fr' ? 'Connexion' : 'Sign in') : (lang === 'fr' ? 'Créer un compte' : 'Create account')}</DialogTitle>
+        </DialogHeader>
+        <Tabs value={mode} onValueChange={setMode}>
+          <TabsList className="grid grid-cols-2 mb-4">
+            <TabsTrigger value="login">{lang === 'fr' ? 'Connexion' : 'Login'}</TabsTrigger>
+            <TabsTrigger value="register">{lang === 'fr' ? 'Inscription' : 'Register'}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="space-y-3">
+          {mode === 'register' && <div><Label>{lang === 'fr' ? 'Nom complet' : 'Full name'}</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1" /></div>}
+          <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1" onKeyDown={(e) => e.key === 'Enter' && submit()} /></div>
+          <div><Label>{lang === 'fr' ? 'Mot de passe' : 'Password'}</Label><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="mt-1" onKeyDown={(e) => e.key === 'Enter' && submit()} /></div>
+          <Button onClick={submit} disabled={busy} className="w-full h-11 font-semibold gap-2">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}{mode === 'login' ? (lang === 'fr' ? 'Se connecter' : 'Sign in') : (lang === 'fr' ? 'Créer mon compte' : 'Create account')}</Button>
+          <p className="text-xs text-muted-foreground text-center">{lang === 'fr' ? 'Astuce admin : admin@yabiso.com / yabiso2025' : 'Admin tip: admin@yabiso.com / yabiso2025'}</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ---- Account view (favorites + my bookings) ---- */
+function AccountView({ lang, user, token, bookings, hotels, favorites, fmt, onOpenHotel, onLogin }) {
+  if (!user) {
+    return <main className="container py-20 text-center"><p className="text-muted-foreground mb-4">{lang === 'fr' ? 'Connectez-vous pour voir votre compte.' : 'Sign in to view your account.'}</p><Button onClick={onLogin} className="gap-2"><LogIn className="h-4 w-4" />{lang === 'fr' ? 'Connexion' : 'Sign in'}</Button></main>
+  }
+  const favHotels = hotels.filter((h) => (favorites || []).includes(h.id))
+  return (
+    <main className="container py-8">
+      <h1 className="text-2xl md:text-3xl font-extrabold mb-1">{lang === 'fr' ? 'Mon compte' : 'My account'}</h1>
+      <p className="text-muted-foreground mb-6">{user.name} · {user.email}</p>
+      <Tabs defaultValue="bookings">
+        <TabsList className="mb-5">
+          <TabsTrigger value="bookings" className="gap-1"><CalendarCheck className="h-4 w-4" />{lang === 'fr' ? 'Mes réservations' : 'My bookings'}</TabsTrigger>
+          <TabsTrigger value="favs" className="gap-1"><Heart className="h-4 w-4" />{lang === 'fr' ? 'Favoris' : 'Favorites'}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="bookings">
+          {(!bookings || bookings.length === 0) ? <div className="py-16 text-center text-muted-foreground">{lang === 'fr' ? 'Aucune réservation.' : 'No bookings yet.'}</div> : (
+            <div className="space-y-3">
+              {bookings.map((b) => (
+                <Card key={b.id} className="p-4 border flex items-center gap-4">
+                  <img src={b.hotelImage} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                  <div className="flex-1">
+                    <div className="font-bold">{b.hotelName}</div>
+                    <div className="text-sm text-muted-foreground">{b.roomName} · {b.checkIn} → {b.checkOut} · {b.nights} {lang === 'fr' ? 'nuits' : 'nights'}</div>
+                    <div className="text-xs font-mono mt-0.5">{b.reference}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-extrabold text-primary">{SYMBOLS[b.currency]}{(b.totalDisplay || 0).toLocaleString('fr-FR')}{b.currency === 'CDF' ? ' FC' : ''}</div>
+                    <Badge variant="secondary" className="mt-1 text-xs">{b.status}</Badge>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="favs">
+          {favHotels.length === 0 ? <div className="py-16 text-center text-muted-foreground">{lang === 'fr' ? 'Aucun favori.' : 'No favorites yet.'}</div> : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {favHotels.map((h) => (
+                <Card key={h.id} className="border overflow-hidden cursor-pointer" onClick={() => onOpenHotel(h.id)}>
+                  <img src={h.images[0]} alt="" className="h-36 w-full object-cover" />
+                  <div className="p-3"><div className="font-semibold line-clamp-1">{h.name}</div><div className="text-xs text-muted-foreground">{h.city}</div><div className="text-primary font-bold mt-1">{fmt(h.priceCDF)}</div></div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
+}
+
+/* ---- Admin dashboard ---- */
+const ADMIN_STATUSES = ['pending_payment', 'payment_received', 'awaiting_hotel_confirmation', 'confirmed_by_hotel', 'customer_notified', 'checkin_confirmed', 'awaiting_payout', 'hotel_paid', 'cancelled', 'refunded']
+function AdminDashboard({ lang, token, onBack }) {
+  const [tab, setTab] = useState('overview')
+  const [stats, setStats] = useState(null)
+  const [hotels, setHotels] = useState([])
+  const [bookings, setBookings] = useState([])
+  const [users, setUsers] = useState([])
+  const [agents, setAgents] = useState([])
+  const [settings, setSettings] = useState({ rates: { USD: 2850, EUR: 3080, GBP: 3600 }, fee: 0.07, commission: 0.3 })
+  const H = { headers: { Authorization: 'Bearer ' + token } }
+  const aFetch = (u, opts = {}) => fetch(u, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } })
+
+  const refresh = useCallback(() => {
+    aFetch('/api/admin/stats').then((r) => r.json()).then(setStats).catch(() => {})
+    fetch('/api/hotels').then((r) => r.json()).then((d) => setHotels(Array.isArray(d) ? d : [])).catch(() => {})
+    aFetch('/api/admin/bookings').then((r) => r.json()).then((d) => setBookings(Array.isArray(d) ? d : [])).catch(() => {})
+    aFetch('/api/admin/users').then((r) => r.json()).then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {})
+    aFetch('/api/admin/agents').then((r) => r.json()).then((d) => setAgents(Array.isArray(d) ? d : [])).catch(() => {})
+    fetch('/api/settings/rates').then((r) => r.json()).then((s) => { if (s.rates) setSettings(s) }).catch(() => {})
+  }, [token])
+  useEffect(() => { refresh() }, [refresh])
+
+  const setBookingStatus = (b, status) => aFetch('/api/admin/bookings/' + b.id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(() => { toast.success('Statut mis à jour'); refresh() })
+  const toggleFeature = (h) => aFetch('/api/admin/hotels/' + h.id + '/feature', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ featured: !h.featured }) }).then(() => refresh())
+  const delHotel = (h) => { if (!confirm('Supprimer ' + h.name + ' ?')) return; aFetch('/api/admin/hotels/' + h.id, { method: 'DELETE' }).then(() => { toast.success('Supprimé'); refresh() }) }
+  const setRole = (u, role) => aFetch('/api/admin/users/' + u.id + '/role', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) }).then(() => refresh())
+  const delUser = (u) => { if (!confirm('Supprimer ' + u.email + ' ?')) return; aFetch('/api/admin/users/' + u.id, { method: 'DELETE' }).then(() => refresh()) }
+  const saveSettings = () => fetch('/api/settings/rates', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ rates: settings.rates, fee: parseFloat(settings.fee), commission: parseFloat(settings.commission) }) }).then((r) => r.json()).then((s) => { if (s.rates) setSettings(s); toast.success(lang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved') })
+
+  if (!token) return <main className="container py-20 text-center text-muted-foreground">Admin only.</main>
+
+  return (
+    <main className="container py-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-2"><Shield className="h-7 w-7 text-primary" />Admin YABISO</h1>
+        <Button variant="outline" onClick={onBack} className="gap-1"><Globe className="h-4 w-4" />{lang === 'fr' ? 'Site' : 'Site'}</Button>
+      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-6 flex-wrap h-auto">
+          <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-4 w-4" />{lang === 'fr' ? 'Vue d\'ensemble' : 'Overview'}</TabsTrigger>
+          <TabsTrigger value="hotels" className="gap-1"><Building2 className="h-4 w-4" />Hôtels</TabsTrigger>
+          <TabsTrigger value="bookings" className="gap-1"><CalendarCheck className="h-4 w-4" />{lang === 'fr' ? 'Réservations' : 'Bookings'}</TabsTrigger>
+          <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" />{lang === 'fr' ? 'Utilisateurs' : 'Users'}</TabsTrigger>
+          <TabsTrigger value="agents" className="gap-1"><UserCog className="h-4 w-4" />Agents</TabsTrigger>
+          <TabsTrigger value="settings" className="gap-1"><SettingsIcon className="h-4 w-4" />{lang === 'fr' ? 'Paramètres' : 'Settings'}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          {stats && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { l: lang === 'fr' ? 'Utilisateurs' : 'Users', v: stats.users, i: Users },
+                { l: 'Hôtels', v: stats.hotels, i: Building2 },
+                { l: lang === 'fr' ? 'Vérifiés' : 'Verified', v: stats.verifiedHotels, i: ShieldCheck },
+                { l: lang === 'fr' ? 'Importés Google' : 'Google imports', v: stats.importedHotels, i: Globe },
+                { l: lang === 'fr' ? 'Réservations' : 'Bookings', v: stats.bookings, i: CalendarCheck },
+                { l: 'Agents', v: stats.agents, i: UserCog },
+                { l: lang === 'fr' ? 'Revenu (CDF)' : 'Revenue (CDF)', v: fmtCDF(stats.revenueCDF), i: Wallet },
+                { l: lang === 'fr' ? 'Commission (CDF)' : 'Commission (CDF)', v: fmtCDF(stats.commissionCDF), i: BarChart3 },
+              ].map((c, i) => (
+                <Card key={i} className="p-5 border">
+                  <div className="flex items-center justify-between"><div className="text-2xl font-extrabold text-primary">{c.v}</div><c.i className="h-7 w-7 text-primary/30" /></div>
+                  <div className="text-sm text-muted-foreground mt-1">{c.l}</div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="hotels">
+          <div className="space-y-2">
+            {hotels.map((h) => (
+              <Card key={h.id} className="p-3 border flex items-center gap-3">
+                <img src={h.images[0]} alt="" className="h-12 w-12 rounded object-cover" />
+                <div className="flex-1 min-w-0"><div className="font-semibold truncate">{h.name}</div><div className="text-xs text-muted-foreground">{h.city} · {fmtCDF(h.priceCDF)} {h.source === 'google_places' ? '· Google' : ''}</div></div>
+                {h.verified && <Badge className="bg-[#0057B8] text-white hover:bg-[#0057B8] text-xs gap-1"><BadgeCheck className="h-3 w-3" />Vérifié</Badge>}
+                <Button size="sm" variant={h.featured ? 'default' : 'outline'} onClick={() => toggleFeature(h)} className="gap-1"><Star className="h-3.5 w-3.5" />{h.featured ? 'Vedette' : 'Mettre'}</Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => delHotel(h)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="bookings">
+          <div className="space-y-2">
+            {bookings.length === 0 && <div className="py-10 text-center text-muted-foreground">Aucune réservation.</div>}
+            {bookings.map((b) => (
+              <Card key={b.id} className="p-3 border flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[200px]"><div className="font-semibold">{b.hotelName} <span className="font-mono text-xs text-muted-foreground">({b.reference})</span></div><div className="text-xs text-muted-foreground">{b.customer?.name} · {b.customer?.email} · {b.checkIn}→{b.checkOut}</div></div>
+                <div className="font-bold text-primary">{SYMBOLS[b.currency]}{(b.totalDisplay || 0).toLocaleString('fr-FR')}{b.currency === 'CDF' ? ' FC' : ''}</div>
+                <Select value={b.status} onValueChange={(v) => setBookingStatus(b, v)}>
+                  <SelectTrigger className="h-8 w-[210px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>{ADMIN_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="users">
+          <div className="space-y-2">
+            {users.map((u) => (
+              <Card key={u.id} className="p-3 border flex items-center gap-3">
+                <Avatar className="h-9 w-9"><AvatarFallback className="bg-primary text-primary-foreground text-sm">{(u.name || 'U')[0].toUpperCase()}</AvatarFallback></Avatar>
+                <div className="flex-1 min-w-0"><div className="font-semibold truncate">{u.name}</div><div className="text-xs text-muted-foreground truncate">{u.email}</div></div>
+                <Select value={u.role} onValueChange={(v) => setRole(u, v)}><SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="user">user</SelectItem><SelectItem value="admin">admin</SelectItem></SelectContent></Select>
+                {u.email !== 'admin@yabiso.com' && <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => delUser(u)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="agents">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {agents.map((a) => (
+              <Card key={a.id} className="p-4 border">
+                <div className="font-semibold">{a.name}</div>
+                <div className="text-xs text-muted-foreground">{a.email}</div>
+                <div className="text-xs mt-1">{a.code} · {a.zone}</div>
+              </Card>
+            ))}
+            {agents.length === 0 && <div className="py-10 text-center text-muted-foreground col-span-full">Aucun agent.</div>}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card className="p-5 border max-w-lg">
+            <h3 className="font-bold mb-3">{lang === 'fr' ? 'Taux de change (CDF par unité)' : 'Exchange rates (CDF per unit)'}</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {['USD', 'EUR', 'GBP'].map((c) => (
+                <div key={c}><Label>{c}</Label><Input type="number" value={settings.rates[c]} onChange={(e) => setSettings({ ...settings, rates: { ...settings.rates, [c]: parseFloat(e.target.value) || 0 } })} className="mt-1" /></div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <div><Label>{lang === 'fr' ? 'Frais de conversion (0-0.10)' : 'Conversion fee (0-0.10)'}</Label><Input type="number" step="0.01" value={settings.fee} onChange={(e) => setSettings({ ...settings, fee: e.target.value })} className="mt-1" /></div>
+              <div><Label>{lang === 'fr' ? 'Commission (0-0.50)' : 'Commission (0-0.50)'}</Label><Input type="number" step="0.01" value={settings.commission} onChange={(e) => setSettings({ ...settings, commission: e.target.value })} className="mt-1" /></div>
+            </div>
+            <Button onClick={saveSettings} className="mt-4 gap-2"><Check className="h-4 w-4" />{lang === 'fr' ? 'Enregistrer' : 'Save'}</Button>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
+}
+
 /* =============================== APP =============================== */
 function App() {
   const [lang, setLang] = useState('fr')
@@ -666,6 +907,10 @@ function App() {
   const [favorites, setFavorites] = useState([])
   const [draft, setDraft] = useState(null)
   const [result, setResult] = useState(null)
+  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(null)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [myBookings, setMyBookings] = useState([])
 
   const today = new Date()
   const [search, setSearch] = useState({
@@ -726,8 +971,37 @@ function App() {
   }
 
   const toggleFav = (id) => {
-    setFavorites((f) => f.includes(id) ? f.filter((x) => x !== id) : [...f, id])
+    if (user && token) {
+      fetch('/api/auth/favorites', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ hotelId: id }) })
+        .then((r) => r.json()).then((d) => { if (d.favorites) setFavorites(d.favorites) }).catch(() => {})
+    } else {
+      setFavorites((f) => f.includes(id) ? f.filter((x) => x !== id) : [...f, id])
+    }
   }
+
+  // Auth: load from localStorage on mount
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem('yabiso_token'); const u = localStorage.getItem('yabiso_user')
+      if (t && u) { setToken(t); const usr = JSON.parse(u); setUser(usr); setFavorites(usr.favorites || []) }
+    } catch (e) {}
+  }, [])
+
+  const onAuthSuccess = (data) => {
+    setUser(data.user); setToken(data.token); setFavorites(data.user.favorites || [])
+    localStorage.setItem('yabiso_token', data.token); localStorage.setItem('yabiso_user', JSON.stringify(data.user))
+    setAuthOpen(false)
+    toast.success(lang === 'fr' ? 'Connexion réussie !' : 'Signed in!')
+  }
+  const logout = () => {
+    setUser(null); setToken(null); setFavorites([]); setMyBookings([])
+    localStorage.removeItem('yabiso_token'); localStorage.removeItem('yabiso_user')
+    goto('home')
+  }
+  const loadMyBookings = useCallback(() => {
+    if (!token) return
+    fetch('/api/auth/bookings', { headers: { Authorization: 'Bearer ' + token } }).then((r) => r.json()).then((d) => setMyBookings(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [token])
 
   const startBooking = (hotel, room) => {
     setDraft({ hotel, room, checkIn: search.checkIn, checkOut: search.checkOut, guests: search.guests })
@@ -766,6 +1040,26 @@ function App() {
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setDark((d) => !d)}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full">
+                  <Avatar className="h-8 w-8"><AvatarFallback className="bg-primary text-primary-foreground text-sm">{(user.name || 'U')[0].toUpperCase()}</AvatarFallback></Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="truncate">{user.name}<div className="text-xs font-normal text-muted-foreground truncate">{user.email}</div></DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { goto('account'); loadMyBookings() }}><CalendarCheck className="h-4 w-4 mr-2" />{lang === 'fr' ? 'Mes réservations' : 'My bookings'}</DropdownMenuItem>
+                {user.role === 'admin' && <DropdownMenuItem onClick={() => goto('admin')}><Shield className="h-4 w-4 mr-2" />Admin</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => goto('agent')}><UserCog className="h-4 w-4 mr-2" />Espace Agent</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout}><LogOut className="h-4 w-4 mr-2" />{lang === 'fr' ? 'Déconnexion' : 'Logout'}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button size="sm" className="gap-1 hidden sm:flex" onClick={() => setAuthOpen(true)}><LogIn className="h-4 w-4" />{lang === 'fr' ? 'Connexion' : 'Sign in'}</Button>
+          )}
         </div>
       </div>
     </header>
@@ -1111,7 +1405,7 @@ function App() {
       setBusy(true)
       try {
         const r = await fetch('/api/bookings', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
           body: JSON.stringify({ hotelId: hotel.id, roomId: room.id, checkIn: draft.checkIn, checkOut: draft.checkOut, guests: draft.guests, currency, customer: cust, paymentMethod: pm }),
         })
         const data = await r.json()
@@ -1292,6 +1586,7 @@ function App() {
         <div>
           <div className="font-semibold mb-3 text-sm">RD Congo · 26 Provinces</div>
           <p className="text-sm text-muted-foreground">Kinshasa, Nord-Kivu, Sud-Kivu, Haut-Katanga, Kongo Central, Tshopo, Équateur, Lualaba, Kasaï...</p>
+          <a href="/rdc" className="text-sm text-primary hover:underline mt-2 inline-block">Toutes les provinces →</a>
         </div>
         <div>
           <div className="font-semibold mb-3 text-sm">Support</div>
@@ -1312,6 +1607,9 @@ function App() {
       {view === 'confirmation' && <ConfirmationView />}
       {view === 'partner' && <PartnerView />}
       {view === 'agent' && <AgentModule lang={lang} onBack={() => { goto('home'); loadHotels() }} />}
+      {view === 'account' && <AccountView lang={lang} user={user} token={token} bookings={myBookings} hotels={hotels} favorites={favorites} fmt={fmt} onOpenHotel={openHotel} onLogin={() => setAuthOpen(true)} />}
+      {view === 'admin' && <AdminDashboard lang={lang} token={token} onBack={() => goto('home')} />}
+      <AuthDialog open={authOpen} onOpenChange={setAuthOpen} lang={lang} onSuccess={onAuthSuccess} />
       <Footer />
     </div>
   )

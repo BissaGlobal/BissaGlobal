@@ -1,6 +1,60 @@
 import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
+
+// ---------------- Auth helpers (simple JWT-like HMAC) ----------------
+const AUTH_SECRET = process.env.AUTH_SECRET || 'yabiso-bissaglobal-secret-2025'
+function signToken(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url')
+  return body + '.' + sig
+}
+function verifyToken(token) {
+  if (!token) return null
+  const [body, sig] = token.split('.')
+  if (!body || !sig) return null
+  const expected = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url')
+  if (sig !== expected) return null
+  try {
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString())
+    if (p.exp && Date.now() > p.exp) return null
+    return p
+  } catch (e) { return null }
+}
+function hashPassword(pw) {
+  const salt = crypto.randomBytes(16).toString('hex')
+  const hash = crypto.pbkdf2Sync(String(pw), salt, 100000, 64, 'sha512').toString('hex')
+  return salt + ':' + hash
+}
+function verifyPassword(pw, stored) {
+  if (!stored || !stored.includes(':')) return false
+  const [salt, hash] = stored.split(':')
+  const h = crypto.pbkdf2Sync(String(pw), salt, 100000, 64, 'sha512').toString('hex')
+  return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(hash))
+}
+function publicUser(u) {
+  if (!u) return null
+  const { _id, passwordHash, ...rest } = u
+  return rest
+}
+async function getAuthUser(db, request) {
+  const auth = request.headers.get('authorization') || ''
+  const token = auth.replace('Bearer ', '').trim()
+  const p = verifyToken(token)
+  if (!p) return null
+  const u = await db.collection('users').findOne({ id: p.id })
+  return u || null
+}
+async function ensureAdmin(db) {
+  const existing = await db.collection('users').findOne({ email: 'admin@yabiso.com' })
+  if (!existing) {
+    await db.collection('users').insertOne({
+      id: uuidv4(), name: 'YABISO Admin', email: 'admin@yabiso.com',
+      passwordHash: hashPassword('yabiso2025'), role: 'admin', favorites: [], createdAt: new Date(),
+    })
+  }
+}
 
 // ---------------- MongoDB ----------------
 let client
@@ -36,13 +90,15 @@ export async function OPTIONS() {
 // Rates = how many CDF per 1 unit of foreign currency (configurable)
 const DEFAULT_RATES = { USD: 2850, EUR: 3080, GBP: 3600 }
 const DEFAULT_FEE = 0.07 // 7% markup on foreign currency payments
+const DEFAULT_COMMISSION = 0.3 // 30% YABISO commission
 
 async function getSettings(db) {
   let s = await db.collection('settings').findOne({ id: 'global' })
   if (!s) {
-    s = { id: 'global', rates: DEFAULT_RATES, fee: DEFAULT_FEE, updatedAt: new Date() }
+    s = { id: 'global', rates: DEFAULT_RATES, fee: DEFAULT_FEE, commission: DEFAULT_COMMISSION, updatedAt: new Date() }
     await db.collection('settings').insertOne(s)
   }
+  if (typeof s.commission !== 'number') s.commission = DEFAULT_COMMISSION
   const { _id, ...rest } = s
   return rest
 }
@@ -214,6 +270,28 @@ function googlePhotoUrls(photos = []) {
   return (photos || []).slice(0, 6).map((p) => '/api/hotel-photo?name=' + encodeURIComponent(p.name) + '&w=1000')
 }
 
+// Enrich amenities from Google Place Details (New)
+async function getPlaceAmenities(placeId) {
+  const key = process.env.GOOGLE_MAPS_API_KEY
+  if (!key || !placeId) return null
+  try {
+    const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
+      headers: {
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask': 'servesBreakfast,servesLunch,servesDinner,servesBeer,servesWine,servesCocktails,parkingOptions,restroom,goodForChildren',
+      },
+    })
+    if (!res.ok) return null
+    const d = await res.json()
+    const am = new Set(['wifi', 'ac'])
+    if (d.servesBreakfast) am.add('breakfast')
+    if (d.servesLunch || d.servesDinner) am.add('restaurant')
+    if (d.servesBeer || d.servesWine || d.servesCocktails) am.add('bar')
+    if (d.parkingOptions && Object.values(d.parkingOptions).some((v) => v === true)) am.add('parking')
+    return Array.from(am)
+  } catch (e) { return null }
+}
+
 // ---------------- Router ----------------
 async function handleRoute(request, { params }) {
   const { path = [] } = await params
@@ -244,6 +322,7 @@ async function handleRoute(request, { params }) {
     // Seed
     if (route === '/seed' && (method === 'GET' || method === 'POST')) {
       const res = await seed(db)
+      await ensureAdmin(db)
       return handleCORS(NextResponse.json(res))
     }
 
@@ -258,10 +337,120 @@ async function handleRoute(request, { params }) {
       const updated = {
         rates: { ...current.rates, ...(body.rates || {}) },
         fee: typeof body.fee === 'number' ? Math.min(0.1, Math.max(0, body.fee)) : current.fee,
+        commission: typeof body.commission === 'number' ? Math.min(0.5, Math.max(0, body.commission)) : current.commission,
         updatedAt: new Date()
       }
       await db.collection('settings').updateOne({ id: 'global' }, { $set: updated })
       return handleCORS(NextResponse.json({ id: 'global', ...updated }))
+    }
+
+    // ---------------- Auth ----------------
+    if (route === '/auth/register' && method === 'POST') {
+      await ensureAdmin(db)
+      const body = await request.json()
+      const { name, email, password } = body
+      if (!name || !email || !password) return handleCORS(NextResponse.json({ error: 'name, email and password are required' }, { status: 400 }))
+      const existing = await db.collection('users').findOne({ email: email.toLowerCase() })
+      if (existing) return handleCORS(NextResponse.json({ error: 'Email déjà utilisé' }, { status: 409 }))
+      const user = { id: uuidv4(), name, email: email.toLowerCase(), passwordHash: hashPassword(password), role: 'user', favorites: [], createdAt: new Date() }
+      await db.collection('users').insertOne({ ...user })
+      const token = signToken({ id: user.id, role: user.role, exp: Date.now() + 30 * 86400000 })
+      return handleCORS(NextResponse.json({ user: publicUser(user), token }))
+    }
+    if (route === '/auth/login' && method === 'POST') {
+      await ensureAdmin(db)
+      const body = await request.json()
+      const { email, password } = body
+      if (!email || !password) return handleCORS(NextResponse.json({ error: 'email and password are required' }, { status: 400 }))
+      const user = await db.collection('users').findOne({ email: String(email).toLowerCase() })
+      if (!user || !verifyPassword(password, user.passwordHash)) return handleCORS(NextResponse.json({ error: 'Identifiants invalides' }, { status: 401 }))
+      const token = signToken({ id: user.id, role: user.role, exp: Date.now() + 30 * 86400000 })
+      return handleCORS(NextResponse.json({ user: publicUser(user), token }))
+    }
+    if (route === '/auth/me' && method === 'GET') {
+      const u = await getAuthUser(db, request)
+      if (!u) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      return handleCORS(NextResponse.json(publicUser(u)))
+    }
+    if (route === '/auth/favorites' && method === 'PUT') {
+      const u = await getAuthUser(db, request)
+      if (!u) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const body = await request.json()
+      const hotelId = body.hotelId
+      const favs = new Set(u.favorites || [])
+      if (favs.has(hotelId)) favs.delete(hotelId); else favs.add(hotelId)
+      const favorites = Array.from(favs)
+      await db.collection('users').updateOne({ id: u.id }, { $set: { favorites } })
+      return handleCORS(NextResponse.json({ favorites }))
+    }
+    if (route === '/auth/bookings' && method === 'GET') {
+      const u = await getAuthUser(db, request)
+      if (!u) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const bookings = await db.collection('bookings').find({ $or: [{ userId: u.id }, { 'customer.email': u.email }] }).sort({ createdAt: -1 }).toArray()
+      return handleCORS(NextResponse.json(clean(bookings)))
+    }
+
+    // ---------------- Admin (require admin role) ----------------
+    if (path[0] === 'admin') {
+      const u = await getAuthUser(db, request)
+      if (!u || u.role !== 'admin') return handleCORS(NextResponse.json({ error: 'Forbidden - admin only' }, { status: 403 }))
+
+      if (route === '/admin/stats' && method === 'GET') {
+        const [users, hotels, bookings, agents] = await Promise.all([
+          db.collection('users').countDocuments(),
+          db.collection('hotels').find({}).toArray(),
+          db.collection('bookings').find({}).toArray(),
+          db.collection('agents').countDocuments(),
+        ])
+        const revenueCDF = bookings.reduce((n, b) => n + (b.totalCDF || 0), 0)
+        const commissionCDF = bookings.reduce((n, b) => n + (b.commissionCDF || 0), 0)
+        const byStatus = {}
+        for (const b of bookings) byStatus[b.status] = (byStatus[b.status] || 0) + 1
+        return handleCORS(NextResponse.json({
+          users, agents, hotels: hotels.length, verifiedHotels: hotels.filter((h) => h.verified).length,
+          importedHotels: hotels.filter((h) => h.source === 'google_places').length,
+          bookings: bookings.length, revenueCDF, commissionCDF, byStatus,
+        }))
+      }
+      if (route === '/admin/users' && method === 'GET') {
+        const users = await db.collection('users').find({}).sort({ createdAt: -1 }).toArray()
+        return handleCORS(NextResponse.json(users.map(publicUser)))
+      }
+      if (path[1] === 'users' && path[2] && path[3] === 'role' && method === 'PUT') {
+        const body = await request.json()
+        const role = body.role === 'admin' ? 'admin' : 'user'
+        await db.collection('users').updateOne({ id: path[2] }, { $set: { role } })
+        return handleCORS(NextResponse.json({ id: path[2], role }))
+      }
+      if (path[1] === 'users' && path[2] && !path[3] && method === 'DELETE') {
+        await db.collection('users').deleteOne({ id: path[2] })
+        return handleCORS(NextResponse.json({ deleted: true }))
+      }
+      if (route === '/admin/bookings' && method === 'GET') {
+        const bookings = await db.collection('bookings').find({}).sort({ createdAt: -1 }).toArray()
+        return handleCORS(NextResponse.json(clean(bookings)))
+      }
+      if (path[1] === 'bookings' && path[2] && path[3] === 'status' && method === 'PUT') {
+        const body = await request.json()
+        const status = body.status
+        await db.collection('bookings').updateOne({ id: path[2] }, { $set: { status }, $push: { statusHistory: { key: status, at: new Date() } } })
+        const updated = await db.collection('bookings').findOne({ id: path[2] })
+        return handleCORS(NextResponse.json(updated ? (({ _id, ...r }) => r)(updated) : { error: 'not found' }))
+      }
+      if (route === '/admin/agents' && method === 'GET') {
+        const agents = await db.collection('agents').find({}).sort({ createdAt: -1 }).toArray()
+        return handleCORS(NextResponse.json(clean(agents)))
+      }
+      if (path[1] === 'hotels' && path[2] && path[3] === 'feature' && method === 'PUT') {
+        const body = await request.json()
+        await db.collection('hotels').updateOne({ id: path[2] }, { $set: { featured: !!body.featured } })
+        return handleCORS(NextResponse.json({ id: path[2], featured: !!body.featured }))
+      }
+      if (path[1] === 'hotels' && path[2] && !path[3] && method === 'DELETE') {
+        await db.collection('hotels').deleteOne({ id: path[2] })
+        return handleCORS(NextResponse.json({ deleted: true }))
+      }
+      return handleCORS(NextResponse.json({ error: 'Unknown admin route' }, { status: 404 }))
     }
 
     // Destinations (group by province/city)
@@ -451,7 +640,9 @@ async function handleRoute(request, { params }) {
           const { _id, ...rest } = existing
           out.push({ ...rest, ...docBase })
         } else {
-          const hotel = { id: uuidv4(), ...docBase, priceCDF: base, verified: false, featured: false, amenities: ['wifi', 'parking', 'restaurant', 'ac'], rooms: rooms(base), agentId, createdAt: new Date() }
+          const enriched = await getPlaceAmenities(externalId)
+          const amenities = enriched && enriched.length ? enriched : ['wifi', 'parking', 'restaurant', 'ac']
+          const hotel = { id: uuidv4(), ...docBase, priceCDF: base, verified: false, featured: false, amenities, rooms: rooms(base), agentId, createdAt: new Date() }
           await db.collection('hotels').insertOne({ ...hotel })
           imported++
           out.push(hotel)
@@ -478,13 +669,16 @@ async function handleRoute(request, { params }) {
       if (!nights || nights < 1) nights = 1
       const settings = await getSettings(db)
       const totalCDF = room.priceCDF * nights
-      const commissionCDF = Math.round(totalCDF * 0.3)
+      const commissionRate = typeof settings.commission === 'number' ? settings.commission : 0.3
+      const commissionCDF = Math.round(totalCDF * commissionRate)
       const payoutCDF = totalCDF - commissionCDF
       const totalDisplay = priceIn(totalCDF, currency, settings.rates, settings.fee)
       const rateUsed = currency === 'CDF' ? 1 : settings.rates[currency]
+      const authU = await getAuthUser(db, request)
       const booking = {
         id: uuidv4(),
         reference: genRef(),
+        userId: authU ? authU.id : null,
         hotelId, hotelName: hotel.name, hotelCity: hotel.city, hotelImage: hotel.images[0],
         roomId, roomName: room.name,
         checkIn, checkOut, nights, guests: guests || 1,

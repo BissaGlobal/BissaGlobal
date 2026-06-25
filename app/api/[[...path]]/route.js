@@ -471,6 +471,67 @@ async function handleRoute(request, { params }) {
       return handleCORS(NextResponse.json({ error: 'Unknown admin route' }, { status: 404 }))
     }
 
+    // ---------------- Hotel Owner (any authenticated user) ----------------
+    if (path[0] === 'owner') {
+      const u = await getAuthUser(db, request)
+      if (!u) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+      if (route === '/owner/hotels' && method === 'GET') {
+        const hotels = await db.collection('hotels').find({ ownerId: u.id }).sort({ createdAt: -1 }).toArray()
+        return handleCORS(NextResponse.json(clean(hotels)))
+      }
+      if (route === '/owner/hotels' && method === 'POST') {
+        const body = await request.json()
+        if (!body.name || !body.city || !body.province || !body.country) {
+          return handleCORS(NextResponse.json({ error: 'name, city, province, country are required' }, { status: 400 }))
+        }
+        const rms = normRooms(body.rooms, parseInt(body.priceCDF))
+        const minPrice = Math.min(...rms.map((r) => r.priceCDF))
+        const images = Array.isArray(body.images) && body.images.length ? body.images : ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
+        const hotel = {
+          id: uuidv4(), name: body.name, type: body.type || 'hotel', city: body.city, province: body.province, country: body.country,
+          region: body.region || 'Afrique Centrale', priceCDF: minPrice, verified: false, featured: false, active: true,
+          lat: parseFloat(body.lat) || 0, lng: parseFloat(body.lng) || 0,
+          images, description: body.description || '', descriptionEn: body.descriptionEn || body.description || '',
+          amenities: Array.isArray(body.amenities) ? body.amenities : [], rooms: rms,
+          rating: 0, reviewCount: 0, ownerId: u.id, ownerName: u.name, createdAt: new Date(),
+        }
+        await db.collection('hotels').insertOne({ ...hotel })
+        return handleCORS(NextResponse.json(hotel))
+      }
+      if (path[1] === 'hotels' && path[2] && method === 'PUT') {
+        const hotel = await db.collection('hotels').findOne({ id: path[2] })
+        if (!hotel || hotel.ownerId !== u.id) return handleCORS(NextResponse.json({ error: 'Not found or not owner' }, { status: 404 }))
+        const body = await request.json()
+        const upd = {}
+        for (const f of ['name', 'type', 'city', 'province', 'country', 'region', 'description', 'descriptionEn']) if (typeof body[f] === 'string') upd[f] = body[f]
+        if (typeof body.active === 'boolean') upd.active = body.active
+        if (Array.isArray(body.amenities)) upd.amenities = body.amenities
+        if (Array.isArray(body.images) && body.images.length) upd.images = body.images
+        if (Array.isArray(body.rooms)) { upd.rooms = normRooms(body.rooms, hotel.priceCDF); upd.priceCDF = Math.min(...upd.rooms.map((r) => r.priceCDF)) }
+        await db.collection('hotels').updateOne({ id: path[2] }, { $set: upd })
+        const updated = await db.collection('hotels').findOne({ id: path[2] })
+        return handleCORS(NextResponse.json((({ _id, ...r }) => r)(updated)))
+      }
+      if (route === '/owner/bookings' && method === 'GET') {
+        const myHotels = await db.collection('hotels').find({ ownerId: u.id }).toArray()
+        const ids = myHotels.map((h) => h.id)
+        const bookings = await db.collection('bookings').find({ hotelId: { $in: ids } }).sort({ createdAt: -1 }).toArray()
+        return handleCORS(NextResponse.json(clean(bookings)))
+      }
+      if (route === '/owner/stats' && method === 'GET') {
+        const myHotels = await db.collection('hotels').find({ ownerId: u.id }).toArray()
+        const ids = myHotels.map((h) => h.id)
+        const bookings = await db.collection('bookings').find({ hotelId: { $in: ids } }).toArray()
+        const rooms = myHotels.reduce((n, h) => n + (h.rooms ? h.rooms.length : 0), 0)
+        const payoutCDF = bookings.reduce((n, b) => n + (b.payoutCDF || 0), 0)
+        const revenueCDF = bookings.reduce((n, b) => n + (b.totalCDF || 0), 0)
+        const pending = bookings.filter((b) => b.status !== 'cancelled' && b.status !== 'hotel_paid').length
+        return handleCORS(NextResponse.json({ properties: myHotels.length, rooms, bookings: bookings.length, pending, payoutCDF, revenueCDF }))
+      }
+      return handleCORS(NextResponse.json({ error: 'Unknown owner route' }, { status: 404 }))
+    }
+
     // Destinations (group by province/city)
     if (route === '/destinations' && method === 'GET') {
       const hotels = await db.collection('hotels').find({}).toArray()

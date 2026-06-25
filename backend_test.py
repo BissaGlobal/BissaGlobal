@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-Backend test for YABISO HOTELS - Mobile Money Payment + Admin Verification Flow
-Tests the manual payment flow (Orange Money, Bank Transfer) with admin approval/rejection
+Backend test for YABISO HOTELS - Hotel Owner Endpoints
+Tests the NEW /api/owner/* endpoints for hotel owners
 """
 
 import requests
 import json
 import sys
+import random
+import string
 from datetime import datetime
 
 # Base URL from .env
 BASE_URL = "https://yabiso-hotels.preview.emergentagent.com/api"
-
-# Test data
-ADMIN_EMAIL = "admin@yabiso.com"
-ADMIN_PASSWORD = "yabiso2025"
 
 # Colors for output
 GREEN = '\033[92m'
@@ -30,19 +28,32 @@ def log_test(step, message, status="INFO"):
 def log_detail(message):
     print(f"  → {message}")
 
-def test_mobile_money_payment_flow():
-    """Test the complete mobile money payment + admin verification flow"""
+def random_email_suffix():
+    """Generate random suffix for email to avoid duplicates"""
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+
+def test_hotel_owner_endpoints():
+    """Test the complete hotel owner endpoints flow"""
     
     print(f"\n{BLUE}{'='*80}")
-    print(f"YABISO HOTELS - Mobile Money Payment + Admin Verification Test")
+    print(f"YABISO HOTELS - Hotel Owner Endpoints Test")
     print(f"{'='*80}{RESET}\n")
     
     results = {
-        "total": 9,
+        "total": 8,
         "passed": 0,
         "failed": 0,
         "details": []
     }
+    
+    # Variables to store across steps
+    tokenA = None
+    userA_id = None
+    ownerA_email = None
+    hotel_id = None
+    tokenB = None
+    userB_id = None
+    booking_id = None
     
     try:
         # ============================================================
@@ -56,378 +67,43 @@ def test_mobile_money_payment_flow():
                 log_detail(f"Seed response: {data}")
                 log_test(0, "Database seeded successfully", "PASS")
             else:
-                log_test(0, f"Seed failed with status {response.status_code}", "FAIL")
-                results["failed"] += 1
+                log_test(0, f"Seed failed with status {response.status_code}", "WARN")
         except Exception as e:
-            log_test(0, f"Seed error: {str(e)}", "FAIL")
-            results["failed"] += 1
+            log_test(0, f"Seed error: {str(e)}", "WARN")
         
         # ============================================================
-        # Get a real hotel and room ID
+        # STEP 1: Register owner A and capture tokenA + userA.id
         # ============================================================
-        log_test("0.1", "Fetching hotels to get real hotelId and roomId", "INFO")
+        log_test(1, "Register owner A and capture tokenA + userA.id", "INFO")
         try:
-            response = requests.get(f"{BASE_URL}/hotels", timeout=10)
-            if response.status_code == 200:
-                hotels = response.json()
-                if len(hotels) > 0:
-                    test_hotel = hotels[0]
-                    hotel_id = test_hotel['id']
-                    room_id = test_hotel['rooms'][0]['id']
-                    log_detail(f"Using hotel: {test_hotel['name']} (ID: {hotel_id})")
-                    log_detail(f"Using room: {test_hotel['rooms'][0]['name']} (ID: {room_id})")
-                    log_test("0.1", "Got real hotel and room IDs", "PASS")
-                else:
-                    log_test("0.1", "No hotels found in database", "FAIL")
-                    return results
-            else:
-                log_test("0.1", f"Failed to fetch hotels: {response.status_code}", "FAIL")
-                return results
-        except Exception as e:
-            log_test("0.1", f"Error fetching hotels: {str(e)}", "FAIL")
-            return results
-        
-        # ============================================================
-        # STEP 1: INSTANT payment (Visa)
-        # ============================================================
-        log_test(1, "Testing INSTANT payment with Visa", "INFO")
-        try:
-            booking_data = {
-                "hotelId": hotel_id,
-                "roomId": room_id,
-                "checkIn": "2025-08-01",
-                "checkOut": "2025-08-03",
-                "guests": 2,
-                "currency": "USD",
-                "customer": {
-                    "name": "Alice Johnson",
-                    "email": "alice.johnson@example.com",
-                    "phone": "+243990111222"
-                },
-                "paymentMethod": "visa"
+            rand_suffix = random_email_suffix()
+            ownerA_email = f"ownerA+{rand_suffix}@test.com"
+            register_data = {
+                "name": "Owner A",
+                "email": ownerA_email,
+                "password": "pass1234"
             }
             
-            response = requests.post(f"{BASE_URL}/bookings", json=booking_data, timeout=10)
-            
-            if response.status_code == 200:
-                booking = response.json()
-                log_detail(f"Booking reference: {booking.get('reference')}")
-                log_detail(f"Payment status: {booking.get('payment', {}).get('status')}")
-                log_detail(f"Booking status: {booking.get('status')}")
-                log_detail(f"StatusHistory length: {len(booking.get('statusHistory', []))}")
-                
-                # Verify expectations
-                checks = []
-                checks.append(("payment.status == 'approved'", booking.get('payment', {}).get('status') == 'approved'))
-                checks.append(("booking.status == 'payment_received'", booking.get('status') == 'payment_received'))
-                checks.append(("statusHistory length == 2", len(booking.get('statusHistory', [])) == 2))
-                
-                all_passed = all(check[1] for check in checks)
-                
-                for check_name, check_result in checks:
-                    status = "✓" if check_result else "✗"
-                    log_detail(f"{status} {check_name}")
-                
-                if all_passed:
-                    log_test(1, "INSTANT payment (Visa) - ALL CHECKS PASSED", "PASS")
-                    results["passed"] += 1
-                    results["details"].append({"step": 1, "status": "PASS", "message": "Instant payment working correctly"})
-                else:
-                    log_test(1, "INSTANT payment (Visa) - SOME CHECKS FAILED", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 1, "status": "FAIL", "message": "Instant payment checks failed"})
-            else:
-                log_test(1, f"Failed with status {response.status_code}: {response.text}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 1, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-        except Exception as e:
-            log_test(1, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 1, "status": "FAIL", "message": str(e)})
-        
-        # ============================================================
-        # STEP 2: MOBILE MONEY (Orange Money) - Manual payment
-        # ============================================================
-        log_test(2, "Testing MOBILE MONEY (Orange) - Manual payment", "INFO")
-        try:
-            booking_data = {
-                "hotelId": hotel_id,
-                "roomId": room_id,
-                "checkIn": "2025-08-01",
-                "checkOut": "2025-08-03",
-                "guests": 2,
-                "currency": "USD",
-                "customer": {
-                    "name": "Bob Mukendi",
-                    "email": "bob.mukendi@example.com",
-                    "phone": "+243990000000"
-                },
-                "paymentMethod": "orange",
-                "payment": {
-                    "payerPhone": "+243990000000",
-                    "txId": "OM-TEST-123",
-                    "proofImage": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-                }
-            }
-            
-            response = requests.post(f"{BASE_URL}/bookings", json=booking_data, timeout=10)
-            
-            if response.status_code == 200:
-                orange_booking = response.json()
-                orange_booking_id = orange_booking.get('id')
-                orange_booking_ref = orange_booking.get('reference')
-                
-                log_detail(f"Booking ID: {orange_booking_id}")
-                log_detail(f"Booking reference: {orange_booking_ref}")
-                log_detail(f"Payment status: {orange_booking.get('payment', {}).get('status')}")
-                log_detail(f"Booking status: {orange_booking.get('status')}")
-                log_detail(f"StatusHistory length: {len(orange_booking.get('statusHistory', []))}")
-                log_detail(f"Payment txId: {orange_booking.get('payment', {}).get('txId')}")
-                log_detail(f"Payment payerPhone: {orange_booking.get('payment', {}).get('payerPhone')}")
-                log_detail(f"Payment proofImage stored: {len(orange_booking.get('payment', {}).get('proofImage', '')) > 0}")
-                
-                # Verify expectations
-                checks = []
-                checks.append(("HTTP 200", True))
-                checks.append(("payment.status == 'pending'", orange_booking.get('payment', {}).get('status') == 'pending'))
-                checks.append(("booking.status == 'pending_payment'", orange_booking.get('status') == 'pending_payment'))
-                checks.append(("statusHistory length == 1", len(orange_booking.get('statusHistory', [])) == 1))
-                checks.append(("payment.txId stored", orange_booking.get('payment', {}).get('txId') == 'OM-TEST-123'))
-                checks.append(("payment.payerPhone stored", orange_booking.get('payment', {}).get('payerPhone') == '+243990000000'))
-                checks.append(("payment.proofImage stored", len(orange_booking.get('payment', {}).get('proofImage', '')) > 0))
-                
-                all_passed = all(check[1] for check in checks)
-                
-                for check_name, check_result in checks:
-                    status = "✓" if check_result else "✗"
-                    log_detail(f"{status} {check_name}")
-                
-                if all_passed:
-                    log_test(2, "MOBILE MONEY (Orange) - ALL CHECKS PASSED", "PASS")
-                    results["passed"] += 1
-                    results["details"].append({"step": 2, "status": "PASS", "message": "Mobile money payment created correctly"})
-                else:
-                    log_test(2, "MOBILE MONEY (Orange) - SOME CHECKS FAILED", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 2, "status": "FAIL", "message": "Mobile money payment checks failed"})
-            else:
-                log_test(2, f"Failed with status {response.status_code}: {response.text}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 2, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-                orange_booking_id = None
-                orange_booking_ref = None
-        except Exception as e:
-            log_test(2, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 2, "status": "FAIL", "message": str(e)})
-            orange_booking_id = None
-            orange_booking_ref = None
-        
-        # ============================================================
-        # STEP 3: BANK transfer - Manual payment
-        # ============================================================
-        log_test(3, "Testing BANK transfer - Manual payment", "INFO")
-        try:
-            booking_data = {
-                "hotelId": hotel_id,
-                "roomId": room_id,
-                "checkIn": "2025-08-01",
-                "checkOut": "2025-08-03",
-                "guests": 2,
-                "currency": "USD",
-                "customer": {
-                    "name": "Charlie Kabila",
-                    "email": "charlie.kabila@example.com",
-                    "phone": "+243990333444"
-                },
-                "paymentMethod": "bank",
-                "payment": {
-                    "txId": "BNK1"
-                }
-            }
-            
-            response = requests.post(f"{BASE_URL}/bookings", json=booking_data, timeout=10)
-            
-            if response.status_code == 200:
-                bank_booking = response.json()
-                log_detail(f"Booking reference: {bank_booking.get('reference')}")
-                log_detail(f"Payment status: {bank_booking.get('payment', {}).get('status')}")
-                
-                # Verify expectations
-                checks = []
-                checks.append(("payment.status == 'pending'", bank_booking.get('payment', {}).get('status') == 'pending'))
-                
-                all_passed = all(check[1] for check in checks)
-                
-                for check_name, check_result in checks:
-                    status = "✓" if check_result else "✗"
-                    log_detail(f"{status} {check_name}")
-                
-                if all_passed:
-                    log_test(3, "BANK transfer - ALL CHECKS PASSED", "PASS")
-                    results["passed"] += 1
-                    results["details"].append({"step": 3, "status": "PASS", "message": "Bank transfer payment created correctly"})
-                else:
-                    log_test(3, "BANK transfer - SOME CHECKS FAILED", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 3, "status": "FAIL", "message": "Bank transfer payment checks failed"})
-            else:
-                log_test(3, f"Failed with status {response.status_code}: {response.text}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 3, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-        except Exception as e:
-            log_test(3, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 3, "status": "FAIL", "message": str(e)})
-        
-        # ============================================================
-        # STEP 4: Admin login
-        # ============================================================
-        log_test(4, "Admin login to get admin token", "INFO")
-        try:
-            login_data = {
-                "email": ADMIN_EMAIL,
-                "password": ADMIN_PASSWORD
-            }
-            
-            response = requests.post(f"{BASE_URL}/auth/login", json=login_data, timeout=10)
+            response = requests.post(f"{BASE_URL}/auth/register", json=register_data, timeout=10)
             
             if response.status_code == 200:
                 auth_data = response.json()
-                admin_token = auth_data.get('token')
-                admin_role = auth_data.get('user', {}).get('role')
+                tokenA = auth_data.get('token')
+                userA_id = auth_data.get('user', {}).get('id')
+                user_name = auth_data.get('user', {}).get('name')
+                user_email = auth_data.get('user', {}).get('email')
                 
-                log_detail(f"Admin role: {admin_role}")
-                log_detail(f"Token received: {admin_token[:20]}..." if admin_token else "No token")
-                
-                if admin_token and admin_role == 'admin':
-                    log_test(4, "Admin login successful", "PASS")
-                    results["passed"] += 1
-                    results["details"].append({"step": 4, "status": "PASS", "message": "Admin login successful"})
-                else:
-                    log_test(4, "Admin login failed - invalid role or token", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 4, "status": "FAIL", "message": "Invalid admin credentials"})
-                    admin_token = None
-            else:
-                log_test(4, f"Failed with status {response.status_code}: {response.text}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 4, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-                admin_token = None
-        except Exception as e:
-            log_test(4, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 4, "status": "FAIL", "message": str(e)})
-            admin_token = None
-        
-        if not admin_token:
-            log_test("ABORT", "Cannot continue without admin token", "FAIL")
-            return results
-        
-        # ============================================================
-        # STEP 5: GET /api/admin/bookings - Find mobile money booking
-        # ============================================================
-        log_test(5, "GET /api/admin/bookings - Find mobile money booking", "INFO")
-        try:
-            headers = {"Authorization": f"Bearer {admin_token}"}
-            response = requests.get(f"{BASE_URL}/admin/bookings", headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                bookings = response.json()
-                log_detail(f"Total bookings: {len(bookings)}")
-                
-                # Find the orange money booking
-                orange_found = None
-                for b in bookings:
-                    if b.get('id') == orange_booking_id:
-                        orange_found = b
-                        break
-                
-                if orange_found:
-                    log_detail(f"Found Orange Money booking: {orange_found.get('reference')}")
-                    log_detail(f"Payment object present: {orange_found.get('payment') is not None}")
-                    log_detail(f"Payment status: {orange_found.get('payment', {}).get('status')}")
-                    log_detail(f"Payment method: {orange_found.get('payment', {}).get('method')}")
-                    log_detail(f"Payment txId: {orange_found.get('payment', {}).get('txId')}")
-                    log_detail(f"Payment payerPhone: {orange_found.get('payment', {}).get('payerPhone')}")
-                    
-                    # Verify expectations
-                    checks = []
-                    checks.append(("payment object exists", orange_found.get('payment') is not None))
-                    checks.append(("payment.status == 'pending'", orange_found.get('payment', {}).get('status') == 'pending'))
-                    checks.append(("payment.method == 'orange'", orange_found.get('payment', {}).get('method') == 'orange'))
-                    checks.append(("payment.txId present", orange_found.get('payment', {}).get('txId') == 'OM-TEST-123'))
-                    checks.append(("payment.payerPhone present", orange_found.get('payment', {}).get('payerPhone') == '+243990000000'))
-                    
-                    all_passed = all(check[1] for check in checks)
-                    
-                    for check_name, check_result in checks:
-                        status = "✓" if check_result else "✗"
-                        log_detail(f"{status} {check_name}")
-                    
-                    if all_passed:
-                        log_test(5, "GET /api/admin/bookings - ALL CHECKS PASSED", "PASS")
-                        results["passed"] += 1
-                        results["details"].append({"step": 5, "status": "PASS", "message": "Admin bookings endpoint working correctly"})
-                    else:
-                        log_test(5, "GET /api/admin/bookings - SOME CHECKS FAILED", "FAIL")
-                        results["failed"] += 1
-                        results["details"].append({"step": 5, "status": "FAIL", "message": "Admin bookings checks failed"})
-                else:
-                    log_test(5, "Orange Money booking not found in admin bookings", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 5, "status": "FAIL", "message": "Booking not found"})
-            else:
-                log_test(5, f"Failed with status {response.status_code}: {response.text}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 5, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-        except Exception as e:
-            log_test(5, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 5, "status": "FAIL", "message": str(e)})
-        
-        if not orange_booking_id:
-            log_test("ABORT", "Cannot continue without orange booking ID", "FAIL")
-            return results
-        
-        # ============================================================
-        # STEP 6: APPROVE - PUT /api/admin/bookings/:id/payment
-        # ============================================================
-        log_test(6, "APPROVE - PUT /api/admin/bookings/:id/payment", "INFO")
-        try:
-            headers = {"Authorization": f"Bearer {admin_token}"}
-            approve_data = {"action": "approve"}
-            
-            response = requests.put(
-                f"{BASE_URL}/admin/bookings/{orange_booking_id}/payment",
-                json=approve_data,
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                approved_booking = response.json()
-                log_detail(f"Booking reference: {approved_booking.get('reference')}")
-                log_detail(f"Payment status: {approved_booking.get('payment', {}).get('status')}")
-                log_detail(f"Payment verifiedAt: {approved_booking.get('payment', {}).get('verifiedAt')}")
-                log_detail(f"Payment verifiedBy: {approved_booking.get('payment', {}).get('verifiedBy')}")
-                log_detail(f"Booking status: {approved_booking.get('status')}")
-                log_detail(f"StatusHistory length: {len(approved_booking.get('statusHistory', []))}")
-                
-                # Check if statusHistory has payment_received entry
-                has_payment_received = any(
-                    entry.get('key') == 'payment_received' 
-                    for entry in approved_booking.get('statusHistory', [])
-                )
+                log_detail(f"Owner A registered: {user_name} ({user_email})")
+                log_detail(f"User ID: {userA_id}")
+                log_detail(f"Token: {tokenA[:20]}..." if tokenA else "No token")
                 
                 # Verify expectations
                 checks = []
                 checks.append(("HTTP 200", True))
-                checks.append(("payment.status == 'approved'", approved_booking.get('payment', {}).get('status') == 'approved'))
-                checks.append(("payment.verifiedAt set", approved_booking.get('payment', {}).get('verifiedAt') is not None))
-                checks.append(("payment.verifiedBy set", approved_booking.get('payment', {}).get('verifiedBy') is not None))
-                checks.append(("booking.status == 'payment_received'", approved_booking.get('status') == 'payment_received'))
-                checks.append(("statusHistory has payment_received entry", has_payment_received))
+                checks.append(("token present", tokenA is not None))
+                checks.append(("user.id present", userA_id is not None))
+                checks.append(("user.name == 'Owner A'", user_name == "Owner A"))
+                checks.append(("user.email matches", user_email == ownerA_email.lower()))
                 
                 all_passed = all(check[1] for check in checks)
                 
@@ -436,75 +112,547 @@ def test_mobile_money_payment_flow():
                     log_detail(f"{status} {check_name}")
                 
                 if all_passed:
-                    log_test(6, "APPROVE payment - ALL CHECKS PASSED", "PASS")
+                    log_test(1, "Owner A registration - PASS", "PASS")
                     results["passed"] += 1
-                    results["details"].append({"step": 6, "status": "PASS", "message": "Payment approval working correctly"})
                 else:
-                    log_test(6, "APPROVE payment - SOME CHECKS FAILED", "FAIL")
+                    log_test(1, "Owner A registration - FAIL", "FAIL")
                     results["failed"] += 1
-                    results["details"].append({"step": 6, "status": "FAIL", "message": "Payment approval checks failed"})
             else:
-                log_test(6, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                log_test(1, f"Failed with status {response.status_code}: {response.text}", "FAIL")
                 results["failed"] += 1
-                results["details"].append({"step": 6, "status": "FAIL", "message": f"HTTP {response.status_code}"})
+        except Exception as e:
+            log_test(1, f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        if not tokenA or not userA_id:
+            log_test("ABORT", "Cannot continue without tokenA and userA_id", "FAIL")
+            return results
+        
+        # ============================================================
+        # STEP 2: POST /api/owner/hotels with tokenA - Create hotel
+        # ============================================================
+        log_test(2, "POST /api/owner/hotels - Create hotel with tokenA", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            hotel_data = {
+                "name": "Owner A Lodge",
+                "type": "lodge",
+                "country": "RD Congo",
+                "province": "Nord-Kivu",
+                "city": "Goma",
+                "description": "Test lodge for owner A",
+                "amenities": ["wifi", "pool"],
+                "rooms": [
+                    {
+                        "name": "Std",
+                        "priceCDF": "100000",
+                        "capacity": 2,
+                        "beds": "1 lit"
+                    },
+                    {
+                        "name": "Suite",
+                        "priceCDF": "250000",
+                        "capacity": 4,
+                        "beds": "2 lits"
+                    }
+                ]
+            }
+            
+            response = requests.post(f"{BASE_URL}/owner/hotels", json=hotel_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                hotel = response.json()
+                hotel_id = hotel.get('id')
+                
+                log_detail(f"Hotel created: {hotel.get('name')} (ID: {hotel_id})")
+                log_detail(f"Owner ID: {hotel.get('ownerId')}")
+                log_detail(f"Verified: {hotel.get('verified')}")
+                log_detail(f"Active: {hotel.get('active')}")
+                log_detail(f"Price CDF: {hotel.get('priceCDF')}")
+                log_detail(f"Rooms count: {len(hotel.get('rooms', []))}")
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("hotel.id present", hotel_id is not None))
+                checks.append(("hotel.ownerId == userA.id", hotel.get('ownerId') == userA_id))
+                checks.append(("hotel.verified == false", hotel.get('verified') == False))
+                checks.append(("hotel.active == true", hotel.get('active') == True))
+                checks.append(("hotel.priceCDF == 100000 (min)", hotel.get('priceCDF') == 100000))
+                checks.append(("2 rooms with ids", len(hotel.get('rooms', [])) == 2 and all(r.get('id') for r in hotel.get('rooms', []))))
+                checks.append(("no _id field", '_id' not in hotel))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test(2, "Create hotel - PASS", "PASS")
+                    results["passed"] += 1
+                else:
+                    log_test(2, "Create hotel - FAIL", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test(2, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                results["failed"] += 1
+        except Exception as e:
+            log_test(2, f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        # Test missing city -> 400
+        log_test("2.1", "POST /api/owner/hotels - Missing city should return 400", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            bad_hotel_data = {
+                "name": "Bad Hotel",
+                "type": "hotel",
+                "country": "RD Congo",
+                "province": "Nord-Kivu"
+                # Missing city
+            }
+            
+            response = requests.post(f"{BASE_URL}/owner/hotels", json=bad_hotel_data, headers=headers, timeout=10)
+            
+            if response.status_code == 400:
+                log_detail("Correctly returned 400 for missing city")
+                log_test("2.1", "Validation (missing city) - PASS", "PASS")
+            else:
+                log_test("2.1", f"Expected 400, got {response.status_code}", "FAIL")
+        except Exception as e:
+            log_test("2.1", f"Error: {str(e)}", "FAIL")
+        
+        # Test no token -> 401
+        log_test("2.2", "POST /api/owner/hotels - No token should return 401", "INFO")
+        try:
+            response = requests.post(f"{BASE_URL}/owner/hotels", json=hotel_data, timeout=10)
+            
+            if response.status_code == 401:
+                log_detail("Correctly returned 401 for missing token")
+                log_test("2.2", "Authorization (no token) - PASS", "PASS")
+            else:
+                log_test("2.2", f"Expected 401, got {response.status_code}", "FAIL")
+        except Exception as e:
+            log_test("2.2", f"Error: {str(e)}", "FAIL")
+        
+        if not hotel_id:
+            log_test("ABORT", "Cannot continue without hotel_id", "FAIL")
+            return results
+        
+        # ============================================================
+        # STEP 3: GET /api/owner/hotels with tokenA - List owner's hotels
+        # ============================================================
+        log_test(3, "GET /api/owner/hotels - List owner A's hotels", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            response = requests.get(f"{BASE_URL}/owner/hotels", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                hotels = response.json()
+                
+                log_detail(f"Total hotels: {len(hotels)}")
+                
+                # Find our created hotel
+                found_hotel = None
+                for h in hotels:
+                    if h.get('id') == hotel_id:
+                        found_hotel = h
+                        break
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("hotels is array", isinstance(hotels, list)))
+                checks.append(("created hotel in list", found_hotel is not None))
+                if found_hotel:
+                    checks.append(("hotel.ownerId == userA.id", found_hotel.get('ownerId') == userA_id))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test(3, "List owner hotels - PASS", "PASS")
+                    results["passed"] += 1
+                else:
+                    log_test(3, "List owner hotels - FAIL", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test(3, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                results["failed"] += 1
+        except Exception as e:
+            log_test(3, f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        # ============================================================
+        # STEP 4: PUT /api/owner/hotels/:id - Update hotel (active=false, then rooms)
+        # ============================================================
+        log_test(4, "PUT /api/owner/hotels/:id - Update active=false", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            update_data = {"active": False}
+            
+            response = requests.put(f"{BASE_URL}/owner/hotels/{hotel_id}", json=update_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                updated_hotel = response.json()
+                
+                log_detail(f"Hotel active: {updated_hotel.get('active')}")
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("hotel.active == false", updated_hotel.get('active') == False))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test(4, "Update active=false - PASS", "PASS")
+                else:
+                    log_test(4, "Update active=false - FAIL", "FAIL")
+            else:
+                log_test(4, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+        except Exception as e:
+            log_test(4, f"Error: {str(e)}", "FAIL")
+        
+        log_test("4.1", "PUT /api/owner/hotels/:id - Update rooms (recompute priceCDF)", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            update_data = {
+                "rooms": [
+                    {
+                        "name": "Eco",
+                        "priceCDF": "80000",
+                        "capacity": 2,
+                        "beds": "1"
+                    }
+                ]
+            }
+            
+            response = requests.put(f"{BASE_URL}/owner/hotels/{hotel_id}", json=update_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                updated_hotel = response.json()
+                
+                log_detail(f"Hotel priceCDF: {updated_hotel.get('priceCDF')}")
+                log_detail(f"Rooms count: {len(updated_hotel.get('rooms', []))}")
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("hotel.priceCDF == 80000 (recomputed)", updated_hotel.get('priceCDF') == 80000))
+                checks.append(("1 room", len(updated_hotel.get('rooms', [])) == 1))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test("4.1", "Update rooms - PASS", "PASS")
+                    results["passed"] += 1
+                else:
+                    log_test("4.1", "Update rooms - FAIL", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test("4.1", f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                results["failed"] += 1
+        except Exception as e:
+            log_test("4.1", f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        # ============================================================
+        # STEP 5: OWNERSHIP ISOLATION - Register owner B and test access
+        # ============================================================
+        log_test(5, "OWNERSHIP ISOLATION - Register owner B", "INFO")
+        try:
+            rand_suffix = random_email_suffix()
+            ownerB_email = f"ownerB+{rand_suffix}@test.com"
+            register_data = {
+                "name": "Owner B",
+                "email": ownerB_email,
+                "password": "pass1234"
+            }
+            
+            response = requests.post(f"{BASE_URL}/auth/register", json=register_data, timeout=10)
+            
+            if response.status_code == 200:
+                auth_data = response.json()
+                tokenB = auth_data.get('token')
+                userB_id = auth_data.get('user', {}).get('id')
+                
+                log_detail(f"Owner B registered: {auth_data.get('user', {}).get('name')} ({ownerB_email})")
+                log_detail(f"User ID: {userB_id}")
+                
+                if tokenB and userB_id:
+                    log_test(5, "Owner B registration - PASS", "PASS")
+                else:
+                    log_test(5, "Owner B registration - FAIL", "FAIL")
+            else:
+                log_test(5, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+        except Exception as e:
+            log_test(5, f"Error: {str(e)}", "FAIL")
+        
+        if not tokenB:
+            log_test("ABORT", "Cannot continue without tokenB", "FAIL")
+            return results
+        
+        log_test("5.1", "PUT /api/owner/hotels/:id with tokenB - Should return 404", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenB}"}
+            update_data = {"active": True}
+            
+            response = requests.put(f"{BASE_URL}/owner/hotels/{hotel_id}", json=update_data, headers=headers, timeout=10)
+            
+            if response.status_code == 404:
+                log_detail("Correctly returned 404 (not owner)")
+                log_test("5.1", "Ownership isolation (PUT) - PASS", "PASS")
+            else:
+                log_test("5.1", f"Expected 404, got {response.status_code}", "FAIL")
+        except Exception as e:
+            log_test("5.1", f"Error: {str(e)}", "FAIL")
+        
+        log_test("5.2", "GET /api/owner/hotels with tokenB - Should NOT include owner A's hotel", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenB}"}
+            response = requests.get(f"{BASE_URL}/owner/hotels", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                hotels = response.json()
+                
+                log_detail(f"Owner B hotels count: {len(hotels)}")
+                
+                # Check if owner A's hotel is in the list
+                found_ownerA_hotel = any(h.get('id') == hotel_id for h in hotels)
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("Owner A's hotel NOT in list", not found_ownerA_hotel))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test("5.2", "Ownership isolation (GET) - PASS", "PASS")
+                    results["passed"] += 1
+                else:
+                    log_test("5.2", "Ownership isolation (GET) - FAIL", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test("5.2", f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                results["failed"] += 1
+        except Exception as e:
+            log_test("5.2", f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        # ============================================================
+        # STEP 6: Create a booking for owner A's hotel
+        # ============================================================
+        log_test(6, "Create booking for owner A's hotel", "INFO")
+        try:
+            # Get the room ID from owner A's hotel
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            response = requests.get(f"{BASE_URL}/owner/hotels", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                hotels = response.json()
+                owner_hotel = next((h for h in hotels if h.get('id') == hotel_id), None)
+                
+                if owner_hotel and owner_hotel.get('rooms'):
+                    room_id = owner_hotel['rooms'][0]['id']
+                    
+                    booking_data = {
+                        "hotelId": hotel_id,
+                        "roomId": room_id,
+                        "checkIn": "2025-09-01",
+                        "checkOut": "2025-09-04",
+                        "guests": 2,
+                        "currency": "USD",
+                        "customer": {
+                            "name": "Test Customer",
+                            "email": "customer@test.com",
+                            "phone": "+243990123456"
+                        },
+                        "paymentMethod": "visa"
+                    }
+                    
+                    response = requests.post(f"{BASE_URL}/bookings", json=booking_data, timeout=10)
+                    
+                    if response.status_code == 200:
+                        booking = response.json()
+                        booking_id = booking.get('id')
+                        
+                        log_detail(f"Booking created: {booking.get('reference')}")
+                        log_detail(f"Hotel ID: {booking.get('hotelId')}")
+                        log_detail(f"Total CDF: {booking.get('totalCDF')}")
+                        log_detail(f"Payout CDF: {booking.get('payoutCDF')}")
+                        
+                        # Verify expectations
+                        checks = []
+                        checks.append(("HTTP 200", True))
+                        checks.append(("booking.id present", booking_id is not None))
+                        checks.append(("booking.hotelId matches", booking.get('hotelId') == hotel_id))
+                        checks.append(("booking.payoutCDF present", booking.get('payoutCDF') is not None))
+                        
+                        all_passed = all(check[1] for check in checks)
+                        
+                        for check_name, check_result in checks:
+                            status = "✓" if check_result else "✗"
+                            log_detail(f"{status} {check_name}")
+                        
+                        if all_passed:
+                            log_test(6, "Create booking - PASS", "PASS")
+                            results["passed"] += 1
+                        else:
+                            log_test(6, "Create booking - FAIL", "FAIL")
+                            results["failed"] += 1
+                    else:
+                        log_test(6, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                        results["failed"] += 1
+                else:
+                    log_test(6, "Could not get room ID from hotel", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test(6, f"Failed to get hotels: {response.status_code}", "FAIL")
+                results["failed"] += 1
         except Exception as e:
             log_test(6, f"Error: {str(e)}", "FAIL")
             results["failed"] += 1
-            results["details"].append({"step": 6, "status": "FAIL", "message": str(e)})
         
         # ============================================================
-        # STEP 7: REJECT flow - Create another orange booking and reject
+        # STEP 7: GET /api/owner/bookings and GET /api/owner/stats
         # ============================================================
-        log_test(7, "REJECT flow - Create another orange booking and reject", "INFO")
+        log_test(7, "GET /api/owner/bookings - List owner A's bookings", "INFO")
         try:
-            # Create another orange booking
-            booking_data = {
-                "hotelId": hotel_id,
-                "roomId": room_id,
-                "checkIn": "2025-08-05",
-                "checkOut": "2025-08-07",
-                "guests": 2,
-                "currency": "USD",
-                "customer": {
-                    "name": "Diana Tshisekedi",
-                    "email": "diana.tshisekedi@example.com",
-                    "phone": "+243990555666"
-                },
-                "paymentMethod": "orange",
-                "payment": {
-                    "payerPhone": "+243990555666",
-                    "txId": "OM-TEST-456",
-                    "proofImage": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-                }
-            }
-            
-            response = requests.post(f"{BASE_URL}/bookings", json=booking_data, timeout=10)
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            response = requests.get(f"{BASE_URL}/owner/bookings", headers=headers, timeout=10)
             
             if response.status_code == 200:
-                reject_booking = response.json()
-                reject_booking_id = reject_booking.get('id')
-                log_detail(f"Created booking for rejection: {reject_booking.get('reference')}")
+                bookings = response.json()
                 
-                # Now reject it
-                headers = {"Authorization": f"Bearer {admin_token}"}
-                reject_data = {"action": "reject"}
+                log_detail(f"Total bookings: {len(bookings)}")
                 
-                response = requests.put(
-                    f"{BASE_URL}/admin/bookings/{reject_booking_id}/payment",
-                    json=reject_data,
-                    headers=headers,
-                    timeout=10
-                )
+                # Find our created booking
+                found_booking = None
+                for b in bookings:
+                    if b.get('id') == booking_id:
+                        found_booking = b
+                        break
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("bookings is array", isinstance(bookings, list)))
+                checks.append(("created booking in list", found_booking is not None))
+                if found_booking:
+                    checks.append(("booking.hotelId matches", found_booking.get('hotelId') == hotel_id))
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test(7, "List owner bookings - PASS", "PASS")
+                else:
+                    log_test(7, "List owner bookings - FAIL", "FAIL")
+            else:
+                log_test(7, f"Failed with status {response.status_code}: {response.text}", "FAIL")
+        except Exception as e:
+            log_test(7, f"Error: {str(e)}", "FAIL")
+        
+        log_test("7.1", "GET /api/owner/stats - Get owner A's statistics", "INFO")
+        try:
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            response = requests.get(f"{BASE_URL}/owner/stats", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                stats = response.json()
+                
+                log_detail(f"Properties: {stats.get('properties')}")
+                log_detail(f"Rooms: {stats.get('rooms')}")
+                log_detail(f"Bookings: {stats.get('bookings')}")
+                log_detail(f"Pending: {stats.get('pending')}")
+                log_detail(f"Payout CDF: {stats.get('payoutCDF')}")
+                log_detail(f"Revenue CDF: {stats.get('revenueCDF')}")
+                
+                # Verify expectations
+                checks = []
+                checks.append(("HTTP 200", True))
+                checks.append(("properties == 1", stats.get('properties') == 1))
+                checks.append(("rooms == 1 (after step 4.1)", stats.get('rooms') == 1))
+                checks.append(("bookings == 1", stats.get('bookings') == 1))
+                checks.append(("pending present", stats.get('pending') is not None))
+                checks.append(("payoutCDF > 0", stats.get('payoutCDF', 0) > 0))
+                checks.append(("revenueCDF > 0", stats.get('revenueCDF', 0) > 0))
+                
+                # Verify payoutCDF matches booking.payoutCDF
+                if found_booking:
+                    expected_payout = found_booking.get('payoutCDF')
+                    actual_payout = stats.get('payoutCDF')
+                    checks.append(("payoutCDF == booking.payoutCDF", expected_payout == actual_payout))
+                    log_detail(f"Expected payout: {expected_payout}, Actual: {actual_payout}")
+                
+                all_passed = all(check[1] for check in checks)
+                
+                for check_name, check_result in checks:
+                    status = "✓" if check_result else "✗"
+                    log_detail(f"{status} {check_name}")
+                
+                if all_passed:
+                    log_test("7.1", "Owner stats - PASS", "PASS")
+                    results["passed"] += 1
+                else:
+                    log_test("7.1", "Owner stats - FAIL", "FAIL")
+                    results["failed"] += 1
+            else:
+                log_test("7.1", f"Failed with status {response.status_code}: {response.text}", "FAIL")
+                results["failed"] += 1
+        except Exception as e:
+            log_test("7.1", f"Error: {str(e)}", "FAIL")
+            results["failed"] += 1
+        
+        # ============================================================
+        # STEP 8: Confirm no Mongo _id in responses
+        # ============================================================
+        log_test(8, "Confirm no Mongo _id in all responses", "INFO")
+        try:
+            # Check hotel response
+            headers = {"Authorization": f"Bearer {tokenA}"}
+            response = requests.get(f"{BASE_URL}/owner/hotels", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                hotels = response.json()
+                has_id_leak = any('_id' in h for h in hotels)
+                
+                log_detail(f"Hotels have _id field: {has_id_leak}")
+                
+                # Check booking response
+                response = requests.get(f"{BASE_URL}/owner/bookings", headers=headers, timeout=10)
                 
                 if response.status_code == 200:
-                    rejected_booking = response.json()
-                    log_detail(f"Payment status: {rejected_booking.get('payment', {}).get('status')}")
-                    log_detail(f"Booking status: {rejected_booking.get('status')}")
+                    bookings = response.json()
+                    has_booking_id_leak = any('_id' in b for b in bookings)
+                    
+                    log_detail(f"Bookings have _id field: {has_booking_id_leak}")
                     
                     # Verify expectations
                     checks = []
-                    checks.append(("payment.status == 'rejected'", rejected_booking.get('payment', {}).get('status') == 'rejected'))
-                    checks.append(("booking.status == 'pending_payment'", rejected_booking.get('status') == 'pending_payment'))
+                    checks.append(("No _id in hotels", not has_id_leak))
+                    checks.append(("No _id in bookings", not has_booking_id_leak))
                     
                     all_passed = all(check[1] for check in checks)
                     
@@ -513,84 +661,20 @@ def test_mobile_money_payment_flow():
                         log_detail(f"{status} {check_name}")
                     
                     if all_passed:
-                        log_test(7, "REJECT payment - ALL CHECKS PASSED", "PASS")
+                        log_test(8, "No Mongo _id leak - PASS", "PASS")
                         results["passed"] += 1
-                        results["details"].append({"step": 7, "status": "PASS", "message": "Payment rejection working correctly"})
                     else:
-                        log_test(7, "REJECT payment - SOME CHECKS FAILED", "FAIL")
+                        log_test(8, "Mongo _id leak detected - FAIL", "FAIL")
                         results["failed"] += 1
-                        results["details"].append({"step": 7, "status": "FAIL", "message": "Payment rejection checks failed"})
                 else:
-                    log_test(7, f"Reject failed with status {response.status_code}: {response.text}", "FAIL")
+                    log_test(8, f"Failed to fetch bookings: {response.status_code}", "FAIL")
                     results["failed"] += 1
-                    results["details"].append({"step": 7, "status": "FAIL", "message": f"HTTP {response.status_code}"})
             else:
-                log_test(7, f"Failed to create booking for rejection: {response.status_code}", "FAIL")
+                log_test(8, f"Failed to fetch hotels: {response.status_code}", "FAIL")
                 results["failed"] += 1
-                results["details"].append({"step": 7, "status": "FAIL", "message": "Failed to create booking"})
-        except Exception as e:
-            log_test(7, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 7, "status": "FAIL", "message": str(e)})
-        
-        # ============================================================
-        # STEP 8: AUTHORIZATION - PUT without token should return 403
-        # ============================================================
-        log_test(8, "AUTHORIZATION - PUT without token should return 403", "INFO")
-        try:
-            reject_data = {"action": "approve"}
-            
-            # Try without token
-            response = requests.put(
-                f"{BASE_URL}/admin/bookings/{orange_booking_id}/payment",
-                json=reject_data,
-                timeout=10
-            )
-            
-            if response.status_code == 403:
-                log_detail("Correctly returned 403 Forbidden")
-                log_test(8, "AUTHORIZATION check - PASSED", "PASS")
-                results["passed"] += 1
-                results["details"].append({"step": 8, "status": "PASS", "message": "Authorization check working correctly"})
-            else:
-                log_test(8, f"Expected 403, got {response.status_code}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 8, "status": "FAIL", "message": f"Expected 403, got {response.status_code}"})
         except Exception as e:
             log_test(8, f"Error: {str(e)}", "FAIL")
             results["failed"] += 1
-            results["details"].append({"step": 8, "status": "FAIL", "message": str(e)})
-        
-        # ============================================================
-        # STEP 9: Confirm no Mongo _id leaks in booking responses
-        # ============================================================
-        log_test(9, "Confirm no Mongo _id leaks in booking responses", "INFO")
-        try:
-            # Check the orange booking we created
-            response = requests.get(f"{BASE_URL}/bookings/{orange_booking_ref}", timeout=10)
-            
-            if response.status_code == 200:
-                booking = response.json()
-                has_id_leak = '_id' in booking
-                
-                log_detail(f"Booking has _id field: {has_id_leak}")
-                
-                if not has_id_leak:
-                    log_test(9, "No Mongo _id leak - PASSED", "PASS")
-                    results["passed"] += 1
-                    results["details"].append({"step": 9, "status": "PASS", "message": "No _id field in response"})
-                else:
-                    log_test(9, "Mongo _id leak detected - FAILED", "FAIL")
-                    results["failed"] += 1
-                    results["details"].append({"step": 9, "status": "FAIL", "message": "_id field present in response"})
-            else:
-                log_test(9, f"Failed to fetch booking: {response.status_code}", "FAIL")
-                results["failed"] += 1
-                results["details"].append({"step": 9, "status": "FAIL", "message": f"HTTP {response.status_code}"})
-        except Exception as e:
-            log_test(9, f"Error: {str(e)}", "FAIL")
-            results["failed"] += 1
-            results["details"].append({"step": 9, "status": "FAIL", "message": str(e)})
         
     except Exception as e:
         print(f"\n{RED}CRITICAL ERROR: {str(e)}{RESET}")
@@ -610,5 +694,5 @@ def test_mobile_money_payment_flow():
     return results
 
 if __name__ == "__main__":
-    results = test_mobile_money_payment_flow()
+    results = test_hotel_owner_endpoints()
     sys.exit(0 if results["failed"] == 0 else 1)

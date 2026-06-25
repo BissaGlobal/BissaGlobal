@@ -927,6 +927,157 @@ function AdminDashboard({ lang, token, onBack }) {
   )
 }
 
+/* ---- Hotel Owner dashboard ---- */
+function OwnerHotelForm({ lang, token, onCreated }) {
+  const [f, setF] = useState({ name: '', type: 'hotel', country: 'RD Congo', province: 'Kinshasa', city: '', description: '' })
+  const [rooms, setRooms] = useState([{ name: 'Chambre Standard', priceCDF: '120000', capacity: 2, beds: '1 lit double' }])
+  const [images, setImages] = useState([])
+  const [amenities, setAmenities] = useState(['wifi', 'parking'])
+  const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const onFiles = async (e) => { const files = Array.from(e.target.files || []).slice(0, 5); if (!files.length) return; setUploading(true); try { const d = await Promise.all(files.map(resizeImage)); setImages((im) => [...im, ...d]) } finally { setUploading(false) } }
+  const setRoom = (i, k, v) => setRooms((rs) => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+  const submit = async () => {
+    if (!f.name || !f.city) { toast.error(lang === 'fr' ? 'Nom et ville requis' : 'Name and city required'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/owner/hotels', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ ...f, amenities, images, rooms: rooms.map((x) => ({ ...x, priceCDF: parseInt(x.priceCDF) || 0 })) }) })
+      const d = await r.json(); if (d.error) throw new Error(d.error)
+      setF({ name: '', type: 'hotel', country: 'RD Congo', province: 'Kinshasa', city: '', description: '' }); setRooms([{ name: 'Chambre Standard', priceCDF: '120000', capacity: 2, beds: '1 lit double' }]); setImages([])
+      toast.success(lang === 'fr' ? 'Hôtel ajouté !' : 'Hotel added!'); onCreated()
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+  return (
+    <Card className="p-5 border">
+      <h3 className="font-bold mb-3">{lang === 'fr' ? 'Ajouter mon hôtel' : 'Add my hotel'}</h3>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2"><Label>{lang === 'fr' ? "Nom de l'établissement" : 'Property name'}</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className="mt-1" /></div>
+        <div><Label>Type</Label><Select value={f.type} onValueChange={(v) => setF({ ...f, type: v })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{TYPE_KEYS.map((k) => <SelectItem key={k} value={k}>{T[lang].types[k]}</SelectItem>)}</SelectContent></Select></div>
+        <div><Label>{lang === 'fr' ? 'Pays' : 'Country'}</Label><Input value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })} className="mt-1" /></div>
+        <div><Label>Province</Label>{f.country === 'RD Congo' ? <Select value={f.province} onValueChange={(v) => setF({ ...f, province: v })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent className="max-h-60">{DRC_PROVINCES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select> : <Input value={f.province} onChange={(e) => setF({ ...f, province: e.target.value })} className="mt-1" />}</div>
+        <div><Label>{lang === 'fr' ? 'Ville' : 'City'}</Label><Input value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} className="mt-1" /></div>
+        <div className="sm:col-span-2"><Label>Description</Label><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="mt-1" rows={2} /></div>
+      </div>
+      <div className="mt-3">
+        <Label className="text-sm">{lang === 'fr' ? 'Équipements' : 'Amenities'}</Label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
+          {Object.entries(AMENITIES).map(([k, m]) => (
+            <label key={k} className="flex items-center gap-2 text-sm cursor-pointer"><Checkbox checked={amenities.includes(k)} onCheckedChange={() => setAmenities((a) => a.includes(k) ? a.filter((x) => x !== k) : [...a, k])} /><m.icon className="h-4 w-4 text-primary" />{m[lang]}</label>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3">
+        <div className="flex items-center justify-between"><Label className="text-sm">{lang === 'fr' ? 'Chambres' : 'Rooms'}</Label><Button size="sm" variant="outline" onClick={() => setRooms((rs) => [...rs, { name: '', priceCDF: '', capacity: 2, beds: '' }])} className="gap-1"><Plus className="h-3.5 w-3.5" /></Button></div>
+        {rooms.map((r, i) => (
+          <div key={i} className="grid grid-cols-12 gap-2 mt-2 items-center">
+            <Input className="col-span-5 h-9" placeholder={lang === 'fr' ? 'Nom' : 'Name'} value={r.name} onChange={(e) => setRoom(i, 'name', e.target.value)} />
+            <Input className="col-span-4 h-9" type="number" placeholder="Prix CDF" value={r.priceCDF} onChange={(e) => setRoom(i, 'priceCDF', e.target.value)} />
+            <Input className="col-span-2 h-9" type="number" placeholder="Cap." value={r.capacity} onChange={(e) => setRoom(i, 'capacity', e.target.value)} />
+            <div className="col-span-1">{rooms.length > 1 && <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setRooms((rs) => rs.filter((_, idx) => idx !== i))}><Trash2 className="h-4 w-4 text-destructive" /></Button>}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <label className="cursor-pointer"><div className="border-2 border-dashed rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40 flex items-center gap-2">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}{lang === 'fr' ? 'Photos' : 'Photos'}</div><input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} /></label>
+        {images.map((src, i) => <img key={i} src={src} alt="" className="h-10 w-10 rounded object-cover" />)}
+      </div>
+      <Button onClick={submit} disabled={busy} className="mt-4 gap-2">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{lang === 'fr' ? "Créer l'hôtel" : 'Create hotel'}</Button>
+    </Card>
+  )
+}
+
+function OwnerDashboard({ lang, token, user, onBack }) {
+  const [tab, setTab] = useState('overview')
+  const [stats, setStats] = useState({ properties: 0, rooms: 0, bookings: 0, pending: 0, payoutCDF: 0, revenueCDF: 0 })
+  const [hotels, setHotels] = useState([])
+  const [bookings, setBookings] = useState([])
+  const aFetch = (u, opts = {}) => fetch(u, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } })
+  const refresh = useCallback(() => {
+    aFetch('/api/owner/stats').then((r) => r.json()).then(setStats).catch(() => {})
+    aFetch('/api/owner/hotels').then((r) => r.json()).then((d) => setHotels(Array.isArray(d) ? d : [])).catch(() => {})
+    aFetch('/api/owner/bookings').then((r) => r.json()).then((d) => setBookings(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [token])
+  useEffect(() => { refresh() }, [refresh])
+  const toggleActive = (h) => aFetch('/api/owner/hotels/' + h.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !(h.active !== false) }) }).then(() => { toast.success(lang === 'fr' ? 'Mis à jour' : 'Updated'); refresh() })
+
+  if (!token) return <main className="container py-20 text-center"><p className="text-muted-foreground mb-3">{lang === 'fr' ? 'Connectez-vous pour accéder à votre espace hôtelier.' : 'Sign in to access your hotel space.'}</p><Button onClick={onBack}>{lang === 'fr' ? 'Retour' : 'Back'}</Button></main>
+
+  return (
+    <main className="container py-8">
+      <div className="flex items-center justify-between mb-6">
+        <div><h1 className="text-2xl md:text-3xl font-extrabold flex items-center gap-2"><Building2 className="h-7 w-7 text-primary" />{lang === 'fr' ? 'Espace Hôtelier' : 'Hotel Owner'}</h1><p className="text-muted-foreground text-sm">{user?.name} · {user?.email}</p></div>
+        <Button variant="outline" onClick={onBack} className="gap-1"><Globe className="h-4 w-4" />{lang === 'fr' ? 'Site' : 'Site'}</Button>
+      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-6 flex-wrap h-auto">
+          <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-4 w-4" />{lang === 'fr' ? "Vue d'ensemble" : 'Overview'}</TabsTrigger>
+          <TabsTrigger value="hotels" className="gap-1"><Building2 className="h-4 w-4" />{lang === 'fr' ? 'Mes hôtels' : 'My hotels'}</TabsTrigger>
+          <TabsTrigger value="add" className="gap-1"><Plus className="h-4 w-4" />{lang === 'fr' ? 'Ajouter' : 'Add'}</TabsTrigger>
+          <TabsTrigger value="bookings" className="gap-1"><CalendarCheck className="h-4 w-4" />{lang === 'fr' ? 'Réservations' : 'Bookings'}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { l: lang === 'fr' ? 'Mes hôtels' : 'My hotels', v: stats.properties, i: Building2 },
+              { l: lang === 'fr' ? 'Chambres' : 'Rooms', v: stats.rooms, i: LayoutDashboard },
+              { l: lang === 'fr' ? 'Réservations' : 'Bookings', v: stats.bookings, i: CalendarCheck },
+              { l: lang === 'fr' ? 'En cours' : 'In progress', v: stats.pending, i: Activity },
+              { l: lang === 'fr' ? 'Mes revenus nets (CDF)' : 'My net payout (CDF)', v: fmtCDF(stats.payoutCDF), i: Wallet },
+              { l: lang === 'fr' ? 'Volume total (CDF)' : 'Total volume (CDF)', v: fmtCDF(stats.revenueCDF), i: BarChart3 },
+            ].map((c, i) => (
+              <Card key={i} className="p-5 border"><div className="flex items-center justify-between"><div className="text-2xl font-extrabold text-primary">{c.v}</div><c.i className="h-7 w-7 text-primary/30" /></div><div className="text-sm text-muted-foreground mt-1">{c.l}</div></Card>
+            ))}
+          </div>
+          <Card className="p-5 border mt-6 text-sm text-muted-foreground">{lang === 'fr' ? 'YABISO reverse vos paiements après confirmation du check-in (commission déduite). Ajoutez vos hôtels et gérez vos chambres et tarifs en CDF.' : 'YABISO releases your payout after check-in confirmation (commission deducted). Add your hotels and manage rooms and prices in CDF.'}</Card>
+        </TabsContent>
+
+        <TabsContent value="hotels">
+          {hotels.length === 0 ? <div className="py-16 text-center text-muted-foreground">{lang === 'fr' ? "Aucun hôtel. Ajoutez votre premier établissement dans l'onglet Ajouter." : 'No hotels yet. Add your first one in the Add tab.'}</div> : (
+            <div className="space-y-3">
+              {hotels.map((h) => (
+                <Card key={h.id} className="p-4 border">
+                  <div className="flex items-center gap-4">
+                    <img src={h.images[0]} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold truncate">{h.name}</div>
+                      <div className="text-xs text-muted-foreground">{h.city}, {h.province} · {h.rooms?.length || 0} {lang === 'fr' ? 'chambres' : 'rooms'} · {fmtCDF(h.priceCDF)}</div>
+                      <div className="flex gap-2 mt-1">{h.verified ? <Badge className="bg-[#0057B8] text-white hover:bg-[#0057B8] text-xs gap-1"><BadgeCheck className="h-3 w-3" />{lang === 'fr' ? 'Vérifié' : 'Verified'}</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">{lang === 'fr' ? 'En attente de vérification' : 'Pending verification'}</Badge>}<Badge variant={h.active !== false ? 'secondary' : 'outline'} className="text-xs">{h.active !== false ? (lang === 'fr' ? 'Actif' : 'Active') : (lang === 'fr' ? 'Inactif' : 'Inactive')}</Badge></div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => toggleActive(h)}>{h.active !== false ? (lang === 'fr' ? 'Désactiver' : 'Deactivate') : (lang === 'fr' ? 'Activer' : 'Activate')}</Button>
+                  </div>
+                  <div className="mt-3 grid sm:grid-cols-3 gap-2">
+                    {(h.rooms || []).map((r) => (
+                      <div key={r.id} className="rounded-lg border p-2 text-xs"><div className="font-semibold">{r.name}</div><div className="text-muted-foreground">{fmtCDF(r.priceCDF)} · {r.capacity} pers.</div></div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="add">
+          <OwnerHotelForm lang={lang} token={token} onCreated={() => { refresh(); setTab('hotels') }} />
+        </TabsContent>
+
+        <TabsContent value="bookings">
+          {bookings.length === 0 ? <div className="py-16 text-center text-muted-foreground">{lang === 'fr' ? 'Aucune réservation.' : 'No bookings.'}</div> : (
+            <div className="space-y-2">
+              {bookings.map((b) => (
+                <Card key={b.id} className="p-3 border flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-[200px]"><div className="font-semibold">{b.hotelName} <span className="font-mono text-xs text-muted-foreground">({b.reference})</span></div><div className="text-xs text-muted-foreground">{b.customer?.name} · {b.checkIn}→{b.checkOut} · {b.nights} {lang === 'fr' ? 'nuits' : 'nights'}</div></div>
+                  <div className="text-right"><div className="font-bold text-primary">{lang === 'fr' ? 'Votre part' : 'Your payout'}: {fmtCDF(b.payoutCDF)}</div><Badge variant="secondary" className="text-xs mt-1">{b.status}</Badge></div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
+}
+
 /* =============================== APP =============================== */
 function App() {
   const [lang, setLang] = useState('fr')
@@ -1086,6 +1237,7 @@ function App() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => { goto('account'); loadMyBookings() }}><CalendarCheck className="h-4 w-4 mr-2" />{lang === 'fr' ? 'Mes réservations' : 'My bookings'}</DropdownMenuItem>
                 {user.role === 'admin' && <DropdownMenuItem onClick={() => goto('admin')}><Shield className="h-4 w-4 mr-2" />Admin</DropdownMenuItem>}
+                <DropdownMenuItem onClick={() => goto('owner')}><Building2 className="h-4 w-4 mr-2" />{lang === 'fr' ? 'Espace Hôtelier' : 'Hotel space'}</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => goto('agent')}><UserCog className="h-4 w-4 mr-2" />Espace Agent</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}><LogOut className="h-4 w-4 mr-2" />{lang === 'fr' ? 'Déconnexion' : 'Logout'}</DropdownMenuItem>
@@ -1757,6 +1909,7 @@ function App() {
       {view === 'agent' && <AgentModule lang={lang} onBack={() => { goto('home'); loadHotels() }} />}
       {view === 'account' && <AccountView lang={lang} user={user} token={token} bookings={myBookings} hotels={hotels} favorites={favorites} fmt={fmt} onOpenHotel={openHotel} onLogin={() => setAuthOpen(true)} />}
       {view === 'admin' && <AdminDashboard lang={lang} token={token} onBack={() => goto('home')} />}
+      {view === 'owner' && <OwnerDashboard lang={lang} token={token} user={user} onBack={() => goto('home')} />}
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} lang={lang} onSuccess={onAuthSuccess} />
       <Footer />
     </div>

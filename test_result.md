@@ -343,6 +343,48 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ PASS - All 8 Hotel Owner endpoint tests passed (100% success rate). STEP 1 - REGISTER OWNER A: HTTP 200, tokenA captured, userA.id captured, user.name='Owner A', email normalized to lowercase. STEP 2 - CREATE HOTEL: HTTP 200, hotel.id present, hotel.ownerId=userA.id, verified=false, active=true, priceCDF=100000 (min of 2 rooms), 2 rooms with generated IDs, no _id field. Validation: missing city returns 400. Authorization: no token returns 401. STEP 3 - LIST OWNER HOTELS: HTTP 200, returns array containing created hotel, hotel.ownerId=userA.id. STEP 4 - UPDATE HOTEL: (4a) active=false: HTTP 200, hotel.active=false. (4b) Update rooms: HTTP 200, priceCDF recomputed to 80000 (min of new room), 1 room. STEP 5 - OWNERSHIP ISOLATION: (5a) Owner B registered successfully. (5b) PUT with tokenB returns 404 (not owner). (5c) GET with tokenB returns empty array (owner A's hotel NOT in list). STEP 6 - CREATE BOOKING: HTTP 200, booking created for owner A's hotel, booking.hotelId matches, booking.payoutCDF=172800 (totalCDF=240000, commission=30%). STEP 7 - OWNER BOOKINGS & STATS: (7a) GET /api/owner/bookings returns array with created booking. (7b) GET /api/owner/stats returns {properties:1, rooms:1 (after step 4b), bookings:1, pending:1, payoutCDF:172800, revenueCDF:240000}, payoutCDF matches booking.payoutCDF. STEP 8 - NO MONGO _ID LEAK: No _id field in hotels or bookings responses. All Hotel Owner endpoints working correctly. Ownership isolation verified. Backend APIs production-ready."
+  - task: "City filter on hotels list"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW: City filter implemented. GET /api/hotels?city=<cityName> filters hotels by city (case-insensitive substring match). Line 560-561: const city = sp.get('city') || ''; if (city) hotels = hotels.filter((h) => (h.city || '').toLowerCase().includes(city.toLowerCase()))"
+        -working: true
+        -agent: "testing"
+        -comment: "✅ PASS - City filter working correctly (2/2 tests passed). A.1: GET /api/hotels?city=Kinshasa returns 11 hotels, all with city containing 'Kinshasa' (case-insensitive verified). Sample hotels: Pullman Kinshasa Grand Hôtel, Hilton Kinshasa, Novotel Kinshasa La Gombe. A.2: GET /api/hotels?city=Goma returns 4 hotels, all with city containing 'Goma'. Sample hotels: Goma Serena Lodge, Goma Test Inn, Owner A Lodge. All hotels correctly filtered by city substring match. No _id field in responses."
+  - task: "Customer review submission"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW: Customer review submission implemented. POST /api/reviews creates review with {hotelId, author, rating, comment}. Validates required fields (hotelId, author, rating) -> 400 if missing. Rating clamped to 1-5. Returns review with id. GET /api/hotels/:id includes reviews array. Lines 585-593."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ PASS - Customer review submission working correctly (4/4 tests passed). B.1: POST /api/reviews with valid data (hotelId, author='QA Reviewer', rating=5, comment='Super séjour test') returns 200 with review.id, no _id field. B.2: GET /api/hotels/:id returns hotel with reviews array containing the new review (author='QA Reviewer', rating=5, comment matches). Total reviews=5. B.3: POST /api/reviews without rating correctly returns 400. B.4: POST /api/reviews without hotelId correctly returns 400. All validation working correctly. Reviews properly nested in hotel detail endpoint."
+  - task: "Customer cancellation"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW: Customer cancellation implemented. POST /api/bookings/:reference/cancel requires Bearer token (must own booking via userId or customer.email). If payment.status='approved' -> status='refunded', else -> status='cancelled'. Cannot cancel if status in ['checkin_confirmed', 'hotel_paid', 'cancelled', 'refunded'] -> 400. Appends statusHistory entry. Lines 797-811."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ PASS - Customer cancellation working correctly (9/9 tests passed - 100% success rate). C.1: User registered (Cancel User, cancel+gl1t24@test.com) with token. C.2: Orange booking (mobile money) created with status='pending_payment', payment.status='pending', reference=YBS-V8BDBN. C.3: Cancel pending payment booking -> status='cancelled', statusHistory has 'cancelled' entry. C.4: Visa booking (instant) created with status='payment_received', payment.status='approved', reference=YBS-REEKYG. C.5: Cancel approved payment booking -> status='refunded', statusHistory has 'refunded' entry. C.6: SECURITY - Cancel without token correctly returns 401. C.7: SECURITY - Cancel with different user token correctly returns 403. C.8: Cancel already cancelled booking correctly returns 400. C.9: No Mongo _id leak in booking responses. All cancellation logic working correctly. Payment status determines refund vs cancellation. Security checks (auth, ownership) working. StatusHistory properly updated."
 
 frontend:
   - task: "Full client booking flow UI"
@@ -391,7 +433,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 7
+  test_sequence: 8
   run_ui: true
 
 test_plan:
@@ -433,3 +475,7 @@ agent_communication:
     -message: "NEW: Hotel Owner endpoints implemented. Please test the NEW /api/owner/* endpoints. All require Bearer token (any authenticated user). Steps: (1) Register owner A: POST /api/auth/register {name, email, password} -> capture tokenA + userA.id. (2) POST /api/owner/hotels with tokenA, body {name, type, country, province, city, description, amenities, rooms[{name, priceCDF, capacity, beds}]} -> expect 200 hotel with id, ownerId=userA.id, verified=false, active=true, priceCDF=min room price, rooms with ids. Missing city -> 400. No token -> 401. (3) GET /api/owner/hotels with tokenA -> array containing the created hotel (only owner A's). (4) PUT /api/owner/hotels/:id with tokenA body {active:false} -> 200, active=false. Then body {rooms:[...]} -> priceCDF recomputed. (5) OWNERSHIP ISOLATION: Register owner B (different email) -> tokenB. PUT /api/owner/hotels/:id with tokenB -> expect 404 (not owner). GET /api/owner/hotels with tokenB -> should NOT include owner A's hotel. (6) Create a booking for owner A's hotel: POST /api/bookings using hotelId and roomId. (7) GET /api/owner/bookings with tokenA -> array containing that booking. GET /api/owner/stats with tokenA -> {properties, rooms, bookings, pending, payoutCDF, revenueCDF}. Verify payoutCDF == booking.payoutCDF. (8) Confirm no Mongo _id in responses."
     -agent: "testing"
     -message: "✅ ALL HOTEL OWNER ENDPOINT TESTS PASSED (8/8 - 100% success rate). Comprehensive testing completed for all /api/owner/* endpoints. STEP 1 - REGISTER OWNER A: ✓ HTTP 200, ✓ tokenA captured, ✓ userA.id captured (5c00a618-f9cb-43a3-a530-9b402576e27c), ✓ user.name='Owner A', ✓ email normalized to lowercase (ownera+hz5vou@test.com). STEP 2 - CREATE HOTEL: ✓ HTTP 200, ✓ hotel.id present (a42fe037-9d99-402d-b54c-fdd870c89f64), ✓ hotel.ownerId=userA.id, ✓ verified=false, ✓ active=true, ✓ priceCDF=100000 (min of 2 rooms: Std 100000, Suite 250000), ✓ 2 rooms with generated IDs, ✓ no _id field. Validation: ✓ missing city returns 400. Authorization: ✓ no token returns 401. STEP 3 - LIST OWNER HOTELS: ✓ HTTP 200, ✓ returns array with 1 hotel, ✓ created hotel in list, ✓ hotel.ownerId=userA.id. STEP 4 - UPDATE HOTEL: (4a) Update active=false: ✓ HTTP 200, ✓ hotel.active=false. (4b) Update rooms: ✓ HTTP 200, ✓ priceCDF recomputed to 80000 (min of new room: Eco 80000), ✓ 1 room. STEP 5 - OWNERSHIP ISOLATION: (5a) ✓ Owner B registered (userB.id: 33c95cc1-c8e9-4eb1-abbe-f2c91f04bf57, email: ownerb+1e5g8r@test.com). (5b) ✓ PUT /api/owner/hotels/:id with tokenB returns 404 (not owner). (5c) ✓ GET /api/owner/hotels with tokenB returns empty array (owner A's hotel NOT in list). STEP 6 - CREATE BOOKING: ✓ HTTP 200, ✓ booking created (reference: YBS-GCK7FL), ✓ booking.hotelId matches owner A's hotel, ✓ totalCDF=240000 (3 nights * 80000), ✓ payoutCDF=172800 (totalCDF - 30% commission). STEP 7 - OWNER BOOKINGS & STATS: (7a) GET /api/owner/bookings: ✓ HTTP 200, ✓ returns array with 1 booking, ✓ created booking in list, ✓ booking.hotelId matches. (7b) GET /api/owner/stats: ✓ HTTP 200, ✓ properties=1, ✓ rooms=1 (after step 4b update), ✓ bookings=1, ✓ pending=1, ✓ payoutCDF=172800, ✓ revenueCDF=240000, ✓ payoutCDF matches booking.payoutCDF (172800). STEP 8 - NO MONGO _ID LEAK: ✓ No _id field in hotels responses, ✓ No _id field in bookings responses. All Hotel Owner endpoints working correctly. Ownership isolation verified. Commission calculation correct (30% = 67200, payout = 172800). Backend APIs production-ready."
+    -agent: "main"
+    -message: "NEW: 3 NEW features implemented - (A) City filter on hotels list, (B) Customer review submission, (C) Customer cancellation. Please test: (A) GET /api/hotels?city=Kinshasa -> returns only hotels with city containing 'Kinshasa' (case-insensitive). GET /api/hotels?city=Goma similarly. (B) POST /api/reviews {hotelId, author, rating, comment} -> 200 returns review with id. Then GET /api/hotels/:id -> reviews[] array should include the new review. Missing rating/hotelId -> 400. (C) Register user, create booking with orange (mobile money) -> status 'pending_payment', cancel -> status 'cancelled'. Create booking with visa (instant) -> status 'payment_received', cancel -> status 'refunded'. Security: cancel without token -> 401, with different user token -> 403, cancel already cancelled -> 400. Confirm no Mongo _id leaks."
+    -agent: "testing"
+    -message: "✅ ALL 3 NEW FEATURES TESTS PASSED (15/15 - 100% success rate). Comprehensive testing completed. (A) CITY FILTER: A.1: GET /api/hotels?city=Kinshasa returns 11 hotels, all with city containing 'Kinshasa' (Pullman Kinshasa Grand Hôtel, Hilton Kinshasa, Novotel Kinshasa La Gombe). A.2: GET /api/hotels?city=Goma returns 4 hotels, all with city containing 'Goma' (Goma Serena Lodge, Goma Test Inn, Owner A Lodge). Case-insensitive substring match working correctly. (B) CUSTOMER REVIEW: B.1: POST /api/reviews with valid data (hotelId, author='QA Reviewer', rating=5, comment='Super séjour test') returns 200 with review.id, no _id field. B.2: GET /api/hotels/:id returns hotel with reviews array containing the new review (author='QA Reviewer', rating=5, comment matches), total reviews=5. B.3: POST /api/reviews without rating correctly returns 400. B.4: POST /api/reviews without hotelId correctly returns 400. All validation working. (C) CUSTOMER CANCELLATION: C.1: User registered (Cancel User, cancel+gl1t24@test.com) with token. C.2: Orange booking created with status='pending_payment', payment.status='pending', reference=YBS-V8BDBN. C.3: Cancel pending payment booking -> status='cancelled', statusHistory has 'cancelled' entry. C.4: Visa booking created with status='payment_received', payment.status='approved', reference=YBS-REEKYG. C.5: Cancel approved payment booking -> status='refunded', statusHistory has 'refunded' entry. C.6: SECURITY - Cancel without token correctly returns 401. C.7: SECURITY - Cancel with different user token correctly returns 403. C.8: Cancel already cancelled booking correctly returns 400. C.9: No Mongo _id leak in booking responses. All 3 NEW features working correctly. Payment status determines refund vs cancellation. Security checks (auth, ownership) working. StatusHistory properly updated. Backend APIs production-ready."

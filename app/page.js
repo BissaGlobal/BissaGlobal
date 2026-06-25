@@ -695,8 +695,47 @@ function AuthDialog({ open, onOpenChange, lang, onSuccess }) {
   )
 }
 
+/* ---- Add review form ---- */
+function AddReviewForm({ lang, hotelId, user, onDone }) {
+  const [rating, setRating] = useState(5)
+  const [author, setAuthor] = useState(user ? user.name : '')
+  const [comment, setComment] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!author || !comment) { toast.error(lang === 'fr' ? 'Nom et commentaire requis' : 'Name and comment required'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotelId, author, rating, comment }) })
+      const d = await r.json(); if (d.error) throw new Error(d.error)
+      setComment(''); toast.success(lang === 'fr' ? 'Merci pour votre avis !' : 'Thanks for your review!'); onDone()
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+  return (
+    <Card className="p-4 border bg-muted/30">
+      <div className="font-semibold text-sm mb-2">{lang === 'fr' ? 'Laisser un avis' : 'Leave a review'}</div>
+      <div className="flex items-center gap-1 mb-2">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} onClick={() => setRating(n)}><Star className={`h-5 w-5 ${n <= rating ? 'fill-[#F4B400] text-[#F4B400]' : 'text-muted-foreground'}`} /></button>
+        ))}
+      </div>
+      {!user && <Input placeholder={lang === 'fr' ? 'Votre nom' : 'Your name'} value={author} onChange={(e) => setAuthor(e.target.value)} className="mb-2" />}
+      <Textarea placeholder={lang === 'fr' ? 'Partagez votre expérience...' : 'Share your experience...'} value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
+      <Button size="sm" className="mt-2 gap-1" onClick={submit} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{lang === 'fr' ? 'Publier' : 'Publish'}</Button>
+    </Card>
+  )
+}
+
 /* ---- Account view (favorites + my bookings) ---- */
-function AccountView({ lang, user, token, bookings, hotels, favorites, fmt, onOpenHotel, onLogin }) {
+function AccountView({ lang, user, token, bookings, hotels, favorites, fmt, onOpenHotel, onLogin, onRefresh }) {
+  const cancelBooking = async (b) => {
+    if (!confirm(lang === 'fr' ? 'Annuler cette réservation ?' : 'Cancel this booking?')) return
+    try {
+      const r = await fetch('/api/bookings/' + b.reference + '/cancel', { method: 'POST', headers: { Authorization: 'Bearer ' + token } })
+      const d = await r.json(); if (d.error) throw new Error(d.error)
+      toast.success(d.status === 'refunded' ? (lang === 'fr' ? 'Annulée — remboursement en cours' : 'Cancelled — refund in progress') : (lang === 'fr' ? 'Réservation annulée' : 'Booking cancelled'))
+      onRefresh && onRefresh()
+    } catch (e) { toast.error(String(e.message || e)) }
+  }
   if (!user) {
     return <main className="container py-20 text-center"><p className="text-muted-foreground mb-4">{lang === 'fr' ? 'Connectez-vous pour voir votre compte.' : 'Sign in to view your account.'}</p><Button onClick={onLogin} className="gap-2"><LogIn className="h-4 w-4" />{lang === 'fr' ? 'Connexion' : 'Sign in'}</Button></main>
   }
@@ -724,6 +763,9 @@ function AccountView({ lang, user, token, bookings, hotels, favorites, fmt, onOp
                   <div className="text-right">
                     <div className="font-extrabold text-primary">{SYMBOLS[b.currency]}{(b.totalDisplay || 0).toLocaleString('fr-FR')}{b.currency === 'CDF' ? ' FC' : ''}</div>
                     <Badge variant="secondary" className="mt-1 text-xs">{b.status}</Badge>
+                    {!['cancelled', 'refunded', 'checkin_confirmed', 'hotel_paid'].includes(b.status) && (
+                      <div><Button size="sm" variant="ghost" className="mt-1 h-7 text-destructive hover:text-destructive" onClick={() => cancelBooking(b)}>{lang === 'fr' ? 'Annuler' : 'Cancel'}</Button></div>
+                    )}
                   </div>
                 </Card>
               ))}
@@ -1518,6 +1560,7 @@ function App() {
             </section>
             <section>
               <h2 className="text-xl font-bold mb-3">{t('reviews')} ({h.reviews?.length || 0})</h2>
+              <div className="mb-4"><AddReviewForm lang={lang} hotelId={h.id} user={user} onDone={() => openHotel(h.id)} /></div>
               <div className="space-y-4">
                 {(h.reviews || []).map((r) => (
                   <Card key={r.id} className="p-4 border">
@@ -1879,6 +1922,8 @@ function App() {
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li><button onClick={() => goto('partner')} className="hover:text-primary">{t('nav_partner')}</button></li>
             <li><button onClick={() => goto('search')} className="hover:text-primary">{t('nav_destinations')}</button></li>
+            <li><a href="/ville" className="hover:text-primary">Hôtels par ville</a></li>
+            <li><a href="/rdc" className="hover:text-primary">Hôtels RDC (provinces)</a></li>
             <li><span className="opacity-60">YABISO Flights · Taxi · Tours (bientôt)</span></li>
           </ul>
         </div>
@@ -1907,7 +1952,7 @@ function App() {
       {view === 'invoice' && <InvoiceView />}
       {view === 'partner' && <PartnerView />}
       {view === 'agent' && <AgentModule lang={lang} onBack={() => { goto('home'); loadHotels() }} />}
-      {view === 'account' && <AccountView lang={lang} user={user} token={token} bookings={myBookings} hotels={hotels} favorites={favorites} fmt={fmt} onOpenHotel={openHotel} onLogin={() => setAuthOpen(true)} />}
+      {view === 'account' && <AccountView lang={lang} user={user} token={token} bookings={myBookings} hotels={hotels} favorites={favorites} fmt={fmt} onOpenHotel={openHotel} onLogin={() => setAuthOpen(true)} onRefresh={loadMyBookings} />}
       {view === 'admin' && <AdminDashboard lang={lang} token={token} onBack={() => goto('home')} />}
       {view === 'owner' && <OwnerDashboard lang={lang} token={token} user={user} onBack={() => goto('home')} />}
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} lang={lang} onSuccess={onAuthSuccess} />

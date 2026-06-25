@@ -557,6 +557,8 @@ async function handleRoute(request, { params }) {
       if (q) hotels = hotels.filter((h) => [h.name, h.city, h.province, h.country, h.region].join(' ').toLowerCase().includes(q))
       if (type) hotels = hotels.filter((h) => h.type === type)
       if (province) hotels = hotels.filter((h) => h.province === province)
+      const city = sp.get('city') || ''
+      if (city) hotels = hotels.filter((h) => (h.city || '').toLowerCase().includes(city.toLowerCase()))
       if (country) hotels = hotels.filter((h) => h.country === country)
       if (featured === 'true') hotels = hotels.filter((h) => h.featured)
       if (guests) hotels = hotels.filter((h) => h.rooms.some((r) => r.capacity >= guests))
@@ -789,6 +791,23 @@ async function handleRoute(request, { params }) {
       }
       await db.collection('bookings').insertOne({ ...booking })
       return handleCORS(NextResponse.json(booking))
+    }
+
+    // Cancel booking (customer - must own it)
+    if (path[0] === 'bookings' && path[1] && path[2] === 'cancel' && method === 'POST') {
+      const u = await getAuthUser(db, request)
+      if (!u) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const b = await db.collection('bookings').findOne({ reference: path[1] })
+      if (!b) return handleCORS(NextResponse.json({ error: 'Booking not found' }, { status: 404 }))
+      if (b.userId !== u.id && (b.customer && b.customer.email) !== u.email) return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      if (['checkin_confirmed', 'hotel_paid', 'cancelled', 'refunded'].includes(b.status)) {
+        return handleCORS(NextResponse.json({ error: 'Cette réservation ne peut plus être annulée' }, { status: 400 }))
+      }
+      const wasPaid = b.payment && b.payment.status === 'approved'
+      const newStatus = wasPaid ? 'refunded' : 'cancelled'
+      await db.collection('bookings').updateOne({ reference: path[1] }, { $set: { status: newStatus }, $push: { statusHistory: { key: newStatus, at: new Date() } } })
+      const updated = await db.collection('bookings').findOne({ reference: path[1] })
+      return handleCORS(NextResponse.json((({ _id, ...r }) => r)(updated)))
     }
 
     // Get booking by reference

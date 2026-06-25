@@ -437,6 +437,24 @@ async function handleRoute(request, { params }) {
         const updated = await db.collection('bookings').findOne({ id: path[2] })
         return handleCORS(NextResponse.json(updated ? (({ _id, ...r }) => r)(updated) : { error: 'not found' }))
       }
+      if (path[1] === 'bookings' && path[2] && path[3] === 'payment' && method === 'PUT') {
+        const body = await request.json()
+        const action = body.action
+        const b = await db.collection('bookings').findOne({ id: path[2] })
+        if (!b) return handleCORS(NextResponse.json({ error: 'not found' }, { status: 404 }))
+        if (action === 'approve') {
+          await db.collection('bookings').updateOne({ id: path[2] }, {
+            $set: { 'payment.status': 'approved', 'payment.verifiedBy': u.id, 'payment.verifiedAt': new Date(), status: 'payment_received' },
+            $push: { statusHistory: { key: 'payment_received', at: new Date() } },
+          })
+        } else if (action === 'reject') {
+          await db.collection('bookings').updateOne({ id: path[2] }, {
+            $set: { 'payment.status': 'rejected', 'payment.verifiedBy': u.id, 'payment.verifiedAt': new Date(), status: 'pending_payment' },
+          })
+        }
+        const updated = await db.collection('bookings').findOne({ id: path[2] })
+        return handleCORS(NextResponse.json((({ _id, ...r }) => r)(updated)))
+      }
       if (route === '/admin/agents' && method === 'GET') {
         const agents = await db.collection('agents').find({}).sort({ createdAt: -1 }).toArray()
         return handleCORS(NextResponse.json(clean(agents)))
@@ -675,6 +693,24 @@ async function handleRoute(request, { params }) {
       const totalDisplay = priceIn(totalCDF, currency, settings.rates, settings.fee)
       const rateUsed = currency === 'CDF' ? 1 : settings.rates[currency]
       const authU = await getAuthUser(db, request)
+      const pm = paymentMethod || 'card'
+      const instantMethods = ['visa', 'mastercard', 'stripe', 'paypal', 'card']
+      const isInstant = instantMethods.includes(pm)
+      const proof = body.payment || {}
+      const payment = {
+        method: pm,
+        status: isInstant ? 'approved' : 'pending',
+        txId: proof.txId || '',
+        payerPhone: proof.payerPhone || customer.phone || '',
+        proofImage: proof.proofImage || '',
+        submittedAt: new Date(),
+        verifiedBy: null,
+        verifiedAt: isInstant ? new Date() : null,
+      }
+      const bookingStatus = isInstant ? 'payment_received' : 'pending_payment'
+      const statusHistory = isInstant
+        ? [{ key: 'pending_payment', at: new Date() }, { key: 'payment_received', at: new Date() }]
+        : [{ key: 'pending_payment', at: new Date() }]
       const booking = {
         id: uuidv4(),
         reference: genRef(),
@@ -684,12 +720,10 @@ async function handleRoute(request, { params }) {
         checkIn, checkOut, nights, guests: guests || 1,
         currency, rateUsed, conversionFee: currency === 'CDF' ? 0 : settings.fee,
         totalCDF, totalDisplay, commissionCDF, payoutCDF,
-        customer, paymentMethod,
-        status: 'payment_received',
-        statusHistory: [
-          { key: 'pending_payment', at: new Date() },
-          { key: 'payment_received', at: new Date() }
-        ],
+        customer, paymentMethod: pm, payment,
+        cancellationPolicy: 'Annulation gratuite jusqu\u00e0 48h avant l\u2019arriv\u00e9e. Remboursement int\u00e9gral si l\u2019h\u00f4tel ne confirme pas la disponibilit\u00e9.',
+        status: bookingStatus,
+        statusHistory,
         createdAt: new Date()
       }
       await db.collection('bookings').insertOne({ ...booking })

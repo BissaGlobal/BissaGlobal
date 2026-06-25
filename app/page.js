@@ -771,6 +771,7 @@ function AdminDashboard({ lang, token, onBack }) {
   useEffect(() => { refresh() }, [refresh])
 
   const setBookingStatus = (b, status) => aFetch('/api/admin/bookings/' + b.id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(() => { toast.success('Statut mis à jour'); refresh() })
+  const verifyPayment = (b, action) => aFetch('/api/admin/bookings/' + b.id + '/payment', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) }).then(() => { toast.success(action === 'approve' ? 'Paiement approuvé' : 'Paiement rejeté'); refresh() })
   const toggleFeature = (h) => aFetch('/api/admin/hotels/' + h.id + '/feature', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ featured: !h.featured }) }).then(() => refresh())
   const delHotel = (h) => { if (!confirm('Supprimer ' + h.name + ' ?')) return; aFetch('/api/admin/hotels/' + h.id, { method: 'DELETE' }).then(() => { toast.success('Supprimé'); refresh() }) }
   const setRole = (u, role) => aFetch('/api/admin/users/' + u.id + '/role', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) }).then(() => refresh())
@@ -790,6 +791,7 @@ function AdminDashboard({ lang, token, onBack }) {
           <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-4 w-4" />{lang === 'fr' ? 'Vue d\'ensemble' : 'Overview'}</TabsTrigger>
           <TabsTrigger value="hotels" className="gap-1"><Building2 className="h-4 w-4" />Hôtels</TabsTrigger>
           <TabsTrigger value="bookings" className="gap-1"><CalendarCheck className="h-4 w-4" />{lang === 'fr' ? 'Réservations' : 'Bookings'}</TabsTrigger>
+          <TabsTrigger value="payments" className="gap-1"><Wallet className="h-4 w-4" />{lang === 'fr' ? 'Paiements' : 'Payments'}</TabsTrigger>
           <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" />{lang === 'fr' ? 'Utilisateurs' : 'Users'}</TabsTrigger>
           <TabsTrigger value="agents" className="gap-1"><UserCog className="h-4 w-4" />Agents</TabsTrigger>
           <TabsTrigger value="settings" className="gap-1"><SettingsIcon className="h-4 w-4" />{lang === 'fr' ? 'Paramètres' : 'Settings'}</TabsTrigger>
@@ -844,6 +846,38 @@ function AdminDashboard({ lang, token, onBack }) {
                 </Select>
               </Card>
             ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="payments">
+          <div className="space-y-3">
+            {bookings.filter((b) => b.payment).length === 0 && <div className="py-10 text-center text-muted-foreground">{lang === 'fr' ? 'Aucun paiement.' : 'No payments.'}</div>}
+            {bookings.filter((b) => b.payment).map((b) => {
+              const p = b.payment || {}
+              const color = p.status === 'approved' ? 'bg-green-600' : p.status === 'rejected' ? 'bg-destructive' : 'bg-[#F4B400] text-black'
+              return (
+                <Card key={b.id} className="p-4 border">
+                  <div className="flex flex-wrap items-start gap-4">
+                    {p.proofImage ? <img src={p.proofImage} alt="preuve" className="h-20 w-20 rounded object-cover border" /> : <div className="h-20 w-20 rounded bg-muted grid place-items-center text-xs text-muted-foreground">{lang === 'fr' ? 'Pas de reçu' : 'No proof'}</div>}
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="font-semibold">{b.hotelName} <span className="font-mono text-xs text-muted-foreground">({b.reference})</span></div>
+                      <div className="text-sm text-muted-foreground">{b.customer?.name} · {b.customer?.email}</div>
+                      <div className="text-sm mt-1">{lang === 'fr' ? 'Méthode' : 'Method'}: <strong className="uppercase">{p.method}</strong> · Tx: <span className="font-mono">{p.txId || '—'}</span> · Tél: {p.payerPhone || '—'}</div>
+                      <div className="font-bold text-primary mt-1">{SYMBOLS[b.currency]}{(b.totalDisplay || 0).toLocaleString('fr-FR')}{b.currency === 'CDF' ? ' FC' : ''}</div>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={color + ' hover:' + color}>{p.status}</Badge>
+                      {p.status === 'pending' && (
+                        <div className="flex gap-2 mt-2">
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1" onClick={() => verifyPayment(b, 'approve')}><Check className="h-3.5 w-3.5" />{lang === 'fr' ? 'Approuver' : 'Approve'}</Button>
+                          <Button size="sm" variant="destructive" className="gap-1" onClick={() => verifyPayment(b, 'reject')}><X className="h-3.5 w-3.5" />{lang === 'fr' ? 'Rejeter' : 'Reject'}</Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
           </div>
         </TabsContent>
 
@@ -1372,6 +1406,13 @@ function App() {
               <a href={wa} target="_blank" rel="noreferrer" className="mt-4 block">
                 <Button variant="outline" className="w-full gap-2 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"><Phone className="h-4 w-4" />{t('whatsapp')}</Button>
               </a>
+              <a href={`https://wa.me/243990000000?text=${encodeURIComponent('YABISO - Je souhaite reserver : ' + h.name + ' (' + h.city + ')')}`} target="_blank" rel="noreferrer" className="mt-2 block">
+                <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"><Phone className="h-4 w-4" />{lang === 'fr' ? 'Réserver via WhatsApp' : 'Book via WhatsApp'}</Button>
+              </a>
+              <div className="mt-4 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground flex gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <span>{lang === 'fr' ? "Annulation gratuite jusqu'à 48h avant l'arrivée. Remboursement intégral si l'hôtel ne confirme pas la disponibilité." : 'Free cancellation up to 48h before check-in. Full refund if the hotel cannot confirm availability.'}</span>
+              </div>
             </Card>
           </div>
         </div>
@@ -1390,8 +1431,10 @@ function App() {
   /* ----------------------------- BOOKING ----------------------------- */
   const BookingView = () => {
     const [cust, setCust] = useState({ name: '', email: '', phone: '' })
-    const [pm, setPm] = useState('visa')
+    const [pm, setPm] = useState('orange')
     const [busy, setBusy] = useState(false)
+    const [proof, setProof] = useState({ payerPhone: '', txId: '', proofImage: '' })
+    const [uploading, setUploading] = useState(false)
     if (!draft) { goto('home'); return null }
     const { hotel, room } = draft
     const nights = Math.max(1, Math.round((new Date(draft.checkOut) - new Date(draft.checkIn)) / 86400000))
@@ -1399,20 +1442,31 @@ function App() {
     const totalDisplay = priceIn(subtotalCDF)
     const baseConverted = currency === 'CDF' ? subtotalCDF : Math.round((subtotalCDF / rates[currency]))
     const feeAmount = currency === 'CDF' ? 0 : totalDisplay - baseConverted
+    const isInstant = ['visa', 'mastercard', 'stripe', 'paypal'].includes(pm)
+    const isMobile = ['orange', 'airtel', 'mpesa'].includes(pm)
+    const needsProof = isMobile || pm === 'bank'
+
+    const onProofFile = async (e) => {
+      const f = (e.target.files || [])[0]; if (!f) return
+      setUploading(true)
+      try { const d = await resizeImage(f); setProof((p) => ({ ...p, proofImage: d })) } catch (err) { toast.error(String(err)) } finally { setUploading(false) }
+    }
 
     const submit = async () => {
       if (!cust.name || !cust.email) { toast.error(lang === 'fr' ? 'Veuillez remplir votre nom et email.' : 'Please fill in your name and email.'); return }
+      if (needsProof && !proof.txId && !proof.proofImage) { toast.error(lang === 'fr' ? "Saisissez l'ID de transaction ou ajoutez une capture du paiement." : 'Enter the transaction ID or upload a payment screenshot.'); return }
       setBusy(true)
       try {
+        const payment = (needsProof || pm === 'hotel') ? { payerPhone: proof.payerPhone || cust.phone, txId: proof.txId, proofImage: proof.proofImage } : undefined
         const r = await fetch('/api/bookings', {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-          body: JSON.stringify({ hotelId: hotel.id, roomId: room.id, checkIn: draft.checkIn, checkOut: draft.checkOut, guests: draft.guests, currency, customer: cust, paymentMethod: pm }),
+          body: JSON.stringify({ hotelId: hotel.id, roomId: room.id, checkIn: draft.checkIn, checkOut: draft.checkOut, guests: draft.guests, currency, customer: cust, paymentMethod: pm, payment }),
         })
         const data = await r.json()
         if (data.error) throw new Error(data.error)
         setResult(data)
         goto('confirmation')
-        toast.success(lang === 'fr' ? 'Paiement reçu !' : 'Payment received!')
+        toast.success(isInstant ? (lang === 'fr' ? 'Paiement reçu !' : 'Payment received!') : (lang === 'fr' ? 'Paiement soumis — en attente de vérification' : 'Payment submitted — pending verification'))
       } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
     }
 
@@ -1439,6 +1493,30 @@ function App() {
                   </button>
                 ))}
               </div>
+
+              {needsProof && (
+                <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div className="text-sm font-semibold flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />{isMobile ? (lang === 'fr' ? 'Paiement Mobile Money' : 'Mobile Money payment') : (lang === 'fr' ? 'Virement bancaire' : 'Bank transfer')}</div>
+                  <p className="text-xs text-muted-foreground">{lang === 'fr' ? 'Envoyez le montant au compte YABISO ci-dessous, puis renseignez les détails de la transaction. YABISO vérifiera et confirmera votre paiement.' : 'Send the amount to the YABISO account below, then provide the transaction details. YABISO will verify and confirm your payment.'}</p>
+                  <div className="rounded-md bg-background border p-2 text-xs font-mono">{isMobile ? 'YABISO ' + pm.toUpperCase() + ' : +243 99 000 0000 (BissaGlobal Services)' : 'YABISO HOTELS — RAWBANK — Compte: 0123-4567-8901 (BissaGlobal Services)'}</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div><Label className="text-xs">{isMobile ? (lang === 'fr' ? 'Numéro payeur' : 'Payer phone') : 'IBAN / Réf.'}</Label><Input value={proof.payerPhone} onChange={(e) => setProof({ ...proof, payerPhone: e.target.value })} placeholder={isMobile ? '+243...' : 'Réf. virement'} className="mt-1" /></div>
+                    <div><Label className="text-xs">{lang === 'fr' ? 'ID de transaction' : 'Transaction ID'}</Label><Input value={proof.txId} onChange={(e) => setProof({ ...proof, txId: e.target.value })} placeholder="ex: ABC123456" className="mt-1" /></div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">{lang === 'fr' ? 'Capture du paiement (optionnel)' : 'Payment screenshot (optional)'}</Label>
+                    <label className="mt-1 flex items-center gap-3 cursor-pointer">
+                      <div className="border-2 border-dashed rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40 flex items-center gap-2">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}{lang === 'fr' ? 'Téléverser' : 'Upload'}</div>
+                      {proof.proofImage && <img src={proof.proofImage} alt="" className="h-12 w-12 rounded object-cover border" />}
+                      <input type="file" accept="image/*" className="hidden" onChange={onProofFile} />
+                    </label>
+                  </div>
+                </div>
+              )}
+              {pm === 'hotel' && (
+                <div className="mt-4 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">{lang === 'fr' ? 'Vous paierez directement à l\'hôtel à votre arrivée. YABISO confirmera la disponibilité avant votre séjour.' : 'You will pay directly at the hotel on arrival. YABISO will confirm availability before your stay.'}</div>
+              )}
+
               <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" />{t('secure')}</p>
             </Card>
           </div>
@@ -1472,7 +1550,7 @@ function App() {
                 <span className="font-bold">{t('total')}</span>
                 <span className="text-2xl font-extrabold text-primary">{fmt(subtotalCDF)}</span>
               </div>
-              <Button onClick={submit} disabled={busy} className="w-full mt-4 h-11 font-semibold gap-2">{busy ? t('processing') : <><CreditCard className="h-4 w-4" />{t('pay_now')}</>}</Button>
+              <Button onClick={submit} disabled={busy} className="w-full mt-4 h-11 font-semibold gap-2">{busy ? t('processing') : <><CreditCard className="h-4 w-4" />{isInstant ? t('pay_now') : (lang === 'fr' ? 'Soumettre le paiement' : 'Submit payment')}</>}</Button>
             </Card>
           </div>
         </div>
@@ -1484,30 +1562,43 @@ function App() {
   const ConfirmationView = () => {
     if (!result) { goto('home'); return null }
     const currentIdx = STATUS_FLOW.findIndex((s) => s.key === result.status)
+    const pay = result.payment || {}
+    const pending = pay.status === 'pending'
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=' + encodeURIComponent('YABISO-' + result.reference)
     return (
       <main className="container py-12 max-w-3xl">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-green-100 dark:bg-green-950 grid place-items-center mb-4"><CheckCircle2 className="h-9 w-9 text-green-600" /></div>
-          <h1 className="text-2xl md:text-3xl font-extrabold">{t('conf_title')}</h1>
-          <p className="text-muted-foreground mt-2">{t('conf_sub')}</p>
+          <div className={`mx-auto h-16 w-16 rounded-full grid place-items-center mb-4 ${pending ? 'bg-[#F4B400]/20' : 'bg-green-100 dark:bg-green-950'}`}>{pending ? <Wallet className="h-9 w-9 text-[#F4B400]" /> : <CheckCircle2 className="h-9 w-9 text-green-600" />}</div>
+          <h1 className="text-2xl md:text-3xl font-extrabold">{pending ? (lang === 'fr' ? 'Réservation enregistrée !' : 'Booking recorded!') : t('conf_title')}</h1>
+          <p className="text-muted-foreground mt-2">{pending ? (lang === 'fr' ? 'Votre paiement est en cours de vérification par YABISO. Référence :' : 'Your payment is being verified by YABISO. Reference:') : t('conf_sub')}</p>
           <div className="mt-3 inline-block rounded-xl bg-primary/10 text-primary px-6 py-3 text-2xl font-extrabold tracking-wider">{result.reference}</div>
           <p className="text-sm text-muted-foreground mt-3">{t('conf_email')}</p>
         </div>
 
-        <Card className="p-5 border mt-8">
-          <div className="flex gap-4 items-center">
-            <img src={result.hotelImage} alt="" className="h-20 w-20 rounded-lg object-cover" />
-            <div className="flex-1">
-              <div className="font-bold">{result.hotelName}</div>
-              <div className="text-sm text-muted-foreground">{result.roomName} · {result.hotelCity}</div>
-              <div className="text-sm text-muted-foreground">{result.checkIn} → {result.checkOut} · {result.nights} {t('nights_label')} · {result.guests} {t('f_guests').toLowerCase()}</div>
+        <div className="grid sm:grid-cols-3 gap-4 mt-8">
+          <Card className="p-4 border flex flex-col items-center justify-center text-center">
+            <img src={qrUrl} alt="QR" className="h-32 w-32" />
+            <div className="text-xs text-muted-foreground mt-2">{lang === 'fr' ? 'Présentez ce QR à l\'arrivée' : 'Show this QR at check-in'}</div>
+          </Card>
+          <Card className="p-5 border sm:col-span-2">
+            <div className="flex gap-4 items-center">
+              <img src={result.hotelImage} alt="" className="h-16 w-16 rounded-lg object-cover" />
+              <div className="flex-1">
+                <div className="font-bold">{result.hotelName}</div>
+                <div className="text-sm text-muted-foreground">{result.roomName} · {result.hotelCity}</div>
+                <div className="text-sm text-muted-foreground">{result.checkIn} → {result.checkOut} · {result.nights} {t('nights_label')}</div>
+              </div>
             </div>
-            <div className="text-right">
+            <Separator className="my-3" />
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground">{lang === 'fr' ? 'Paiement' : 'Payment'} · {(pay.method || '').toUpperCase()}</div>
+                <Badge className={`mt-1 ${pay.status === 'approved' ? 'bg-green-600 hover:bg-green-600' : pay.status === 'rejected' ? 'bg-destructive hover:bg-destructive' : 'bg-[#F4B400] text-black hover:bg-[#F4B400]'}`}>{pay.status === 'approved' ? (lang === 'fr' ? 'Approuvé' : 'Approved') : pay.status === 'rejected' ? (lang === 'fr' ? 'Rejeté' : 'Rejected') : (lang === 'fr' ? 'En attente de vérification' : 'Pending verification')}</Badge>
+              </div>
               <div className="text-xl font-extrabold text-primary">{SYMBOLS[result.currency]}{result.totalDisplay.toLocaleString('fr-FR')}{result.currency === 'CDF' ? ' FC' : ''}</div>
-              <Badge className="mt-1 bg-green-600 hover:bg-green-600">{STATUS_FLOW[currentIdx]?.[lang]}</Badge>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
 
         <Card className="p-6 border mt-6">
           <h2 className="font-bold mb-4">{t('conf_process')}</h2>
@@ -1527,9 +1618,65 @@ function App() {
           </ol>
         </Card>
 
-        <div className="text-center mt-8">
+        <div className="text-center mt-8 flex flex-wrap justify-center gap-3">
+          <Button onClick={() => goto('invoice')} className="gap-2"><ClipboardList className="h-4 w-4" />{lang === 'fr' ? 'Voir / Imprimer la facture' : 'View / Print invoice'}</Button>
           <Button variant="outline" onClick={() => { goto('home'); loadHotels() }}>{t('back_home')}</Button>
         </div>
+      </main>
+    )
+  }
+
+  /* ----------------------------- INVOICE ----------------------------- */
+  const InvoiceView = () => {
+    if (!result) { goto('home'); return null }
+    const r = result
+    const sym = SYMBOLS[r.currency]
+    const amt = (n) => sym + (n || 0).toLocaleString('fr-FR') + (r.currency === 'CDF' ? ' FC' : '')
+    return (
+      <main className="container py-8 max-w-3xl">
+        <div className="flex justify-between items-center mb-4 print:hidden">
+          <button onClick={() => goto('confirmation')} className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1"><ArrowRight className="h-3.5 w-3.5 rotate-180" />{t('back')}</button>
+          <Button onClick={() => window.print()} className="gap-2"><ClipboardList className="h-4 w-4" />{lang === 'fr' ? 'Imprimer' : 'Print'}</Button>
+        </div>
+        <Card className="p-8 border" id="invoice">
+          <div className="flex justify-between items-start border-b pb-4 mb-4">
+            <div>
+              <div className="text-2xl font-extrabold">YABISO<span className="text-[#F4B400]"> HOTELS</span></div>
+              <div className="text-xs text-muted-foreground">Powered by BissaGlobal Services</div>
+            </div>
+            <div className="text-right text-sm">
+              <div className="font-bold">{lang === 'fr' ? 'FACTURE' : 'INVOICE'}</div>
+              <div className="font-mono">{r.reference}</div>
+              <div className="text-muted-foreground">{new Date(r.createdAt || Date.now()).toLocaleDateString('fr-FR')}</div>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm mb-4">
+            <div>
+              <div className="font-semibold mb-1">{lang === 'fr' ? 'Client' : 'Customer'}</div>
+              <div>{r.customer?.name}</div>
+              <div className="text-muted-foreground">{r.customer?.email}</div>
+              <div className="text-muted-foreground">{r.customer?.phone}</div>
+            </div>
+            <div className="sm:text-right">
+              <div className="font-semibold mb-1">{lang === 'fr' ? 'Hébergement' : 'Stay'}</div>
+              <div>{r.hotelName}</div>
+              <div className="text-muted-foreground">{r.roomName} · {r.hotelCity}</div>
+              <div className="text-muted-foreground">{r.checkIn} → {r.checkOut} ({r.nights} {t('nights_label')})</div>
+            </div>
+          </div>
+          <table className="w-full text-sm border-t">
+            <tbody>
+              <tr className="border-b"><td className="py-2">{r.roomName} × {r.nights} {t('nights_label')}</td><td className="py-2 text-right">{amt(r.totalDisplay)}</td></tr>
+              {r.currency !== 'CDF' && <tr className="border-b text-xs text-muted-foreground"><td className="py-2">{t('exchange_rate')}: 1 {r.currency} = {(r.rateUsed || 0).toLocaleString('fr-FR')} FC · {t('conv_fee')} {Math.round((r.conversionFee || 0) * 100)}%</td><td></td></tr>}
+              <tr className="font-extrabold text-lg"><td className="py-3">{t('total')}</td><td className="py-3 text-right text-primary">{amt(r.totalDisplay)}</td></tr>
+            </tbody>
+          </table>
+          <div className="mt-4 text-xs text-muted-foreground">
+            <div>{lang === 'fr' ? 'Paiement' : 'Payment'}: {(r.payment?.method || '').toUpperCase()} — {r.payment?.status}</div>
+            <div className="mt-2">{r.cancellationPolicy}</div>
+          </div>
+          <div className="mt-6 text-center text-xs text-muted-foreground border-t pt-4">YABISO HOTELS — AFRICA BOOKS WITH CONFIDENCE — support@yabiso.com · +243 99 000 0000</div>
+        </Card>
       </main>
     )
   }
@@ -1605,6 +1752,7 @@ function App() {
       {view === 'hotel' && <HotelView />}
       {view === 'booking' && <BookingView />}
       {view === 'confirmation' && <ConfirmationView />}
+      {view === 'invoice' && <InvoiceView />}
       {view === 'partner' && <PartnerView />}
       {view === 'agent' && <AgentModule lang={lang} onBack={() => { goto('home'); loadHotels() }} />}
       {view === 'account' && <AccountView lang={lang} user={user} token={token} bookings={myBookings} hotels={hotels} favorites={favorites} fmt={fmt} onOpenHotel={openHotel} onLogin={() => setAuthOpen(true)} />}

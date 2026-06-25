@@ -171,6 +171,49 @@ function normRooms(rooms, fallbackBase) {
   }))
 }
 
+// ---------------- Google Places (import real hotels) ----------------
+async function googleTextSearch(query, maxResultCount = 20) {
+  const key = process.env.GOOGLE_MAPS_API_KEY
+  if (!key) throw new Error('GOOGLE_MAPS_API_KEY not configured')
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.primaryType,places.types',
+    },
+    body: JSON.stringify({ textQuery: query, maxResultCount, languageCode: 'fr' }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error('Google Places error ' + res.status + ': ' + text)
+  }
+  const json = await res.json()
+  return json.places || []
+}
+
+function mapGoogleType(types = [], primary = '') {
+  const all = [primary, ...(types || [])].join(' ').toLowerCase()
+  if (all.includes('resort')) return 'resort'
+  if (all.includes('apartment') || all.includes('apart')) return 'apartment'
+  if (all.includes('guest')) return 'guesthouse'
+  if (all.includes('lodge') || all.includes('campground')) return 'lodge'
+  if (all.includes('bed_and_breakfast') || all.includes('bnb')) return 'guesthouse'
+  return 'hotel'
+}
+
+function priceTierFromRating(rating) {
+  if (rating >= 4.6) return 280000
+  if (rating >= 4.2) return 200000
+  if (rating >= 3.8) return 150000
+  return 110000
+}
+
+function googlePhotoUrls(photos = []) {
+  // Store proxy URLs so the API key is never exposed to the browser
+  return (photos || []).slice(0, 6).map((p) => '/api/hotel-photo?name=' + encodeURIComponent(p.name) + '&w=1000')
+}
+
 // ---------------- Router ----------------
 async function handleRoute(request, { params }) {
   const { path = [] } = await params
@@ -178,6 +221,20 @@ async function handleRoute(request, { params }) {
   const method = request.method
 
   try {
+    // Photo proxy (no DB needed) - keeps the Google API key server-side
+    if (path[0] === 'hotel-photo' && method === 'GET') {
+      const sp = new URL(request.url).searchParams
+      const name = sp.get('name')
+      const w = parseInt(sp.get('w') || '1000')
+      const key = process.env.GOOGLE_MAPS_API_KEY
+      if (!name || !key) return new NextResponse('Missing photo name or key', { status: 400 })
+      const url = 'https://places.googleapis.com/v1/' + name + '/media?maxWidthPx=' + w + '&key=' + key
+      const photoRes = await fetch(url)
+      if (!photoRes.ok) return new NextResponse('Photo error', { status: 502 })
+      const buf = Buffer.from(await photoRes.arrayBuffer())
+      return new NextResponse(buf, { status: 200, headers: { 'Content-Type': photoRes.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800' } })
+    }
+
     const db = await connectToMongo()
 
     if (route === '/' && method === 'GET') {
@@ -350,6 +407,58 @@ async function handleRoute(request, { params }) {
       const updated = await db.collection('hotels').findOne({ id: path[1] })
       const { _id, ...rest } = updated
       return handleCORS(NextResponse.json(rest))
+    }
+
+    // ---------------- Import real hotels from Google Places ----------------
+    if (route === '/import/hotels' && method === 'POST') {
+      const body = await request.json()
+      const city = (body.city || '').trim()
+      if (!city) return handleCORS(NextResponse.json({ error: 'city is required' }, { status: 400 }))
+      const country = body.country || 'RD Congo'
+      const province = body.province || city
+      const region = body.region || 'Afrique Centrale'
+      const agentId = body.agentId || null
+      const googleCountry = country === 'RD Congo' ? 'Democratic Republic of Congo' : country
+      let places
+      try {
+        places = await googleTextSearch('hotels and lodging in ' + city + ', ' + googleCountry, body.max || 20)
+      } catch (e) {
+        return handleCORS(NextResponse.json({ error: String(e.message || e) }, { status: 502 }))
+      }
+      let imported = 0, updated = 0
+      const out = []
+      for (const p of places) {
+        const name = p.displayName && p.displayName.text
+        if (!name) continue
+        const externalId = p.id
+        const rating = typeof p.rating === 'number' ? Math.round(p.rating * 10) / 10 : 0
+        const base = priceTierFromRating(rating)
+        let images = googlePhotoUrls(p.photos)
+        if (images.length === 0) images = ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
+        const addr = p.formattedAddress || city
+        const docBase = {
+          name, type: mapGoogleType(p.types, p.primaryType), city, province, country, region,
+          address: addr, lat: (p.location && p.location.latitude) || 0, lng: (p.location && p.location.longitude) || 0,
+          images, rating, reviewCount: p.userRatingCount || 0,
+          source: 'google_places', externalId,
+          description: name + ' situé à ' + addr + '. Hébergement vérifié et importé depuis Google.',
+          descriptionEn: name + ' located at ' + addr + '. Accommodation imported from Google.',
+        }
+        const existing = await db.collection('hotels').findOne({ externalId })
+        if (existing) {
+          await db.collection('hotels').updateOne({ externalId }, { $set: { ...docBase, priceCDF: existing.priceCDF, rooms: existing.rooms } })
+          updated++
+          const { _id, ...rest } = existing
+          out.push({ ...rest, ...docBase })
+        } else {
+          const hotel = { id: uuidv4(), ...docBase, priceCDF: base, verified: false, featured: false, amenities: ['wifi', 'parking', 'restaurant', 'ac'], rooms: rooms(base), agentId, createdAt: new Date() }
+          await db.collection('hotels').insertOne({ ...hotel })
+          imported++
+          out.push(hotel)
+        }
+      }
+      if (agentId) await logActivity(db, agentId, 'property_created', 'Import Google Places : ' + imported + ' hôtel(s), ' + updated + ' mis à jour à ' + city, { city, imported, updated })
+      return handleCORS(NextResponse.json({ city, fetched: places.length, imported, updated, hotels: out }))
     }
 
     // Create booking

@@ -259,6 +259,34 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "✅ PASS - Both endpoints working correctly. POST /api/hotels/:id/verify returns hotel with verified=true, verification object containing {agentId, lat:-1.68, lng:29.22, at:timestamp}. PUT /api/hotels/:id with description and rooms updates hotel: description='Updated desc', rooms replaced with 1 room, priceCDF recomputed to 90000 (min of new rooms). Logs property_verified and property_updated activities. No _id field in responses."
+  - task: "Import real hotels from Google Places"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "POST /api/import/hotels {city, province, country, region, agentId} calls Google Places Text Search (New) and upserts hotels by externalId. Maps name/address/lat/lng/rating/reviewCount/photos. Generates default rooms+price. Photos as proxy URLs. Requires GOOGLE_MAPS_API_KEY (set). NEEDS real API test to confirm key+billing (watch for 403)."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ PASS - Google Places import working perfectly. Successfully imported 10 hotels from Kinshasa. Sample: 'Hilton Kinshasa' at '10 Ave Wagenia, Kinshasa' (lat:-4.298516, lng:15.312124), rating:4.7 (675 reviews), price:280000 CDF, externalId:ChIJ2cprb4ozahoRkzjixTHH1GM. All required fields validated: id, name, address (real), lat/lng (non-zero), rating, reviewCount, images[] (proxy URLs starting with /api/hotel-photo?name=), rooms[] (3 rooms), priceCDF>0, source='google_places', externalId, verified=false. No _id field. Idempotency verified: second import updated 10 hotels (not duplicated). No duplicate externalIds found. Validation working: missing city returns 400. Google API key and billing configured correctly."
+  - task: "Photo proxy (Google Places media)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "GET /api/hotel-photo?name=<photoName>&w=1000 streams Google media server-side (hides API key). Returns image content-type."
+        -working: true
+        -agent: "testing"
+        -comment: "✅ PASS - Photo proxy working correctly. GET /api/hotel-photo?name=places%2FChIJ2cprb4ozahoRkzjixTHH1GM%2Fphotos%2FAaVGc3nSgD9nOWuv6j...&w=400 returns HTTP 200 with Content-Type: image/jpeg and 37005 bytes. Successfully proxies Google Places photos server-side, hiding API key from client."
 
 frontend:
   - task: "Full client booking flow UI"
@@ -276,7 +304,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -293,4 +321,8 @@ agent_communication:
     -agent: "main"
     -message: "Agent/field-agent endpoints implemented. Please test: POST /api/agents/login (find-or-create), GET /api/agents/:id, GET /api/agents/:id/hotels, GET /api/agents/:id/activities, GET /api/agents/:id/stats, POST /api/hotels (create property), POST /api/hotels/:id/verify (GPS verification), PUT /api/hotels/:id (update property)."
     -agent: "testing"
-    -message: "✅ ALL AGENT ENDPOINT TESTS PASSED (10/10 scenarios - 100% success rate). Comprehensive testing completed: (1) POST /api/agents/login creates agent with code AG-H3N5 format, find-or-create returns same ID, validation 400 for missing email. (2) GET /api/agents/:id returns agent, 404 for unknown. (3) POST /api/hotels creates property with verified=false, priceCDF=120000 (min room), 2 rooms with IDs, agentId set, validation 400 for missing city. (4) GET /api/agents/:id/hotels returns array with 1 hotel. (5) GET /api/agents/:id/stats returns properties=1, verified=0, rooms=2, activities=2. (6) POST /api/hotels/:id/verify sets verified=true with verification{agentId,lat,lng,at}. (7) Stats after verify: verified=1. (8) PUT /api/hotels/:id updates description and rooms, priceCDF recomputed to 90000. (9) GET /api/agents/:id/activities returns 4 activities (agent_registered, property_created, property_verified, property_updated) sorted desc, property_verified meta has lat/lng. (10) No _id field in any response. All agent backend APIs production-ready."
+    -message: "✅ ALL AGENT ENDPOINT TESTS PASSED (10/10 scenarios - 100% success rate). Comprehensive testing completed: (1) POST /api/agents/login creates agent with code AG-H3N5 format, find-or-create returns same ID, validation 400 for missing email. (2) GET /api/agents/:id returns agent, 404 for unknown. (3) POST /api/hotels creates property with verified=false, priceCDF=120000 (min room), 2 rooms with IDs, agentId set, validation 400 for missing city. (4) GET /api/agents/:id/hotels returns array with 1 hotel. (5) GET /api/agents/:id/stats returns properties=1, verified=0, rooms=2, activities=2. (6) POST /api/hotels/:id/verify sets verified=true with verification{agentId,lat,lng,at}. (7) Stats after verify: verified=1. (8) PUT /api/hotels/:id updates description and rooms, priceCDF recomputed to 90000. (9) GET /api/agents/:id/activities returns 4 activities sorted desc, property_verified meta has lat/lng. (10) No _id field in any response. All agent backend APIs production-ready."
+    -agent: "main"
+    -message: "NEW: Google Places import feature. Please test the REAL external integration (GOOGLE_MAPS_API_KEY is configured in .env). 1) POST /api/import/hotels with body {\"city\":\"Kinshasa\",\"province\":\"Kinshasa\",\"country\":\"RD Congo\",\"region\":\"Afrique Centrale\",\"agentId\":\"<create one via /api/agents/login first>\",\"max\":10}. Expect 200 with {city, fetched>0, imported>=0, updated>=0, hotels:[...]}. Each hotel must have: id, name, address (real formatted address), lat/lng (non-zero), rating, reviewCount, images[] where each image is a string starting with '/api/hotel-photo?name=', rooms[] (3 generated), priceCDF, source='google_places', externalId, verified=false. IMPORTANT: If Google returns 403/billing error, the endpoint returns {error} with status 502 - report the exact error message so we can tell the user to enable billing. 2) Idempotency: call the same import twice; second call should have updated>0 and not create duplicates (verify total hotels with externalId not duplicated). 3) Test GET /api/hotel-photo?name=<the photoName decoded from a hotel's image URL>&w=400 -> should return HTTP 200 with content-type image/* (binary). To get a valid photoName, take a hotel.images[0] from the import response, it's URL-encoded after 'name='. 4) Missing city -> 400. Report exact Google error if any."
+    -agent: "testing"
+    -message: "✅ ALL GOOGLE PLACES IMPORT TESTS PASSED (5/5 scenarios - 100% success rate). REAL external API integration verified. (1) Agent creation: Import Agent (ID: 7ffce7ad-4264-4a27-99d0-65f9d49e5a0b, code: AG-4FP6). (2) Import successful: 10 hotels fetched from Google Places API for Kinshasa, 10 imported. Sample hotel: 'Hilton Kinshasa' at '10 Ave Wagenia, Kinshasa, République démocratique du Congo' (lat:-4.298516, lng:15.312124), rating:4.7 (675 reviews), price:280000 CDF, externalId:ChIJ2cprb4ozahoRkzjixTHH1GM. All required fields validated: id, name, address (real), lat/lng (non-zero), rating, reviewCount, images[] (proxy URLs /api/hotel-photo?name=...), rooms[] (3 rooms), priceCDF>0, source='google_places', externalId, verified=false, no _id. (3) Idempotency verified: second import updated 10 hotels (imported=0, updated=10), no duplicates created. (4) Photo proxy working: GET /api/hotel-photo returns HTTP 200, Content-Type: image/jpeg, 37005 bytes. (5) Validation working: missing city returns 400. Google API key and billing configured correctly. All backend APIs production-ready."

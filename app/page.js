@@ -134,6 +134,11 @@ const AT = {
     add_room_row: 'Ajouter une chambre', create: 'Créer la propriété', creating: 'Création...',
     no_acts: 'Aucune activité enregistrée.', verified_done: 'Propriété vérifiée !',
     created_done: 'Propriété créée avec succès !', back_site: 'Retour au site',
+    import_tab: 'Importer (Google)', import_title: 'Importer de vrais hôtels via Google Places',
+    import_sub: 'Récupérez automatiquement les hôtels publics de la RDC avec photos et adresses réelles.',
+    import_btn: 'Importer depuis Google', importing: 'Import en cours...', max_results: 'Nombre max',
+    quick: 'Import rapide — grandes villes RDC', go_site: 'Voir sur le site',
+    imported_label: 'importés', updated_label: 'mis à jour', fetched_label: 'trouvés',
   },
   en: {
     space: 'YABISO Agent Space', login_sub: 'Log in to manage your properties in the field.',
@@ -152,6 +157,11 @@ const AT = {
     add_room_row: 'Add a room', create: 'Create property', creating: 'Creating...',
     no_acts: 'No activity recorded.', verified_done: 'Property verified!',
     created_done: 'Property created successfully!', back_site: 'Back to site',
+    import_tab: 'Import (Google)', import_title: 'Import real hotels via Google Places',
+    import_sub: 'Automatically fetch public DRC hotels with real photos and addresses.',
+    import_btn: 'Import from Google', importing: 'Importing...', max_results: 'Max results',
+    quick: 'Quick import — major DRC cities', go_site: 'View on site',
+    imported_label: 'imported', updated_label: 'updated', fetched_label: 'found',
   },
 }
 
@@ -285,6 +295,7 @@ function AgentModule({ lang, onBack }) {
           <TabsTrigger value="overview" className="gap-1"><LayoutDashboard className="h-4 w-4" />{at('overview')}</TabsTrigger>
           <TabsTrigger value="properties" className="gap-1"><Building2 className="h-4 w-4" />{at('my_props')}</TabsTrigger>
           <TabsTrigger value="add" className="gap-1"><Plus className="h-4 w-4" />{at('add_prop')}</TabsTrigger>
+          <TabsTrigger value="import" className="gap-1"><Globe className="h-4 w-4" />{at('import_tab')}</TabsTrigger>
           <TabsTrigger value="activity" className="gap-1"><ClipboardList className="h-4 w-4" />{at('activity')}</TabsTrigger>
         </TabsList>
 
@@ -323,6 +334,10 @@ function AgentModule({ lang, onBack }) {
 
         <TabsContent value="add">
           <AddPropertyForm lang={lang} at={at} typeLabel={typeLabel} agentId={agent.id} onCreated={() => { toast.success(at('created_done')); refresh(agent.id); setTab('properties') }} />
+        </TabsContent>
+
+        <TabsContent value="import">
+          <ImportPanel lang={lang} at={at} agentId={agent.id} onImported={() => refresh(agent.id)} />
         </TabsContent>
 
         <TabsContent value="activity">
@@ -539,6 +554,100 @@ function AddPropertyForm({ lang, at, typeLabel, agentId, onCreated }) {
 
         <Button onClick={submit} disabled={busy} className="w-full h-11 font-semibold gap-2">{busy ? <><Loader2 className="h-4 w-4 animate-spin" />{at('creating')}</> : <><Plus className="h-4 w-4" />{at('create')}</>}</Button>
       </div>
+    </div>
+  )
+}
+
+/* ---- Import real hotels (Google Places) ---- */
+const DRC_QUICK = [
+  { city: 'Kinshasa', province: 'Kinshasa' }, { city: 'Goma', province: 'Nord-Kivu' },
+  { city: 'Lubumbashi', province: 'Haut-Katanga' }, { city: 'Bukavu', province: 'Sud-Kivu' },
+  { city: 'Kisangani', province: 'Tshopo' }, { city: 'Matadi', province: 'Kongo Central' },
+]
+function ImportPanel({ lang, at, agentId, onImported }) {
+  const [country, setCountry] = useState('RD Congo')
+  const [province, setProvince] = useState('Kinshasa')
+  const [city, setCity] = useState('Kinshasa')
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
+  const [result, setResult] = useState(null)
+
+  const runImport = async (c, p) => {
+    const cityName = (c || city).trim()
+    if (!cityName) { toast.error(lang === 'fr' ? 'Ville requise' : 'City required'); return null }
+    const body = { city: cityName, province: p || province, country, region: country === 'RD Congo' ? 'Afrique Centrale' : '', agentId, max: 20 }
+    const r = await fetch('/api/import/hotels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await r.json()
+    if (data.error) throw new Error(data.error)
+    return data
+  }
+
+  const doSingle = async () => {
+    setBusy(true); setResult(null); setProgress('')
+    try {
+      const data = await runImport()
+      setResult(data); onImported()
+      toast.success(lang === 'fr' ? `${data.imported} importés, ${data.updated} mis à jour` : `${data.imported} imported, ${data.updated} updated`)
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false) }
+  }
+
+  const doQuick = async () => {
+    setBusy(true); setResult(null)
+    let totalImp = 0, totalUpd = 0, all = []
+    try {
+      for (const q of DRC_QUICK) {
+        setProgress(q.city + '...')
+        const data = await runImport(q.city, q.province)
+        totalImp += data.imported; totalUpd += data.updated; all = all.concat(data.hotels || [])
+      }
+      setResult({ city: 'RDC', fetched: all.length, imported: totalImp, updated: totalUpd, hotels: all })
+      onImported()
+      toast.success(lang === 'fr' ? `${totalImp} importés au total` : `${totalImp} imported in total`)
+    } catch (e) { toast.error(String(e.message || e)) } finally { setBusy(false); setProgress('') }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-5 border">
+        <h3 className="font-bold flex items-center gap-2"><Globe className="h-5 w-5 text-primary" />{at('import_title')}</h3>
+        <p className="text-sm text-muted-foreground mt-1">{at('import_sub')}</p>
+        <div className="grid gap-3 sm:grid-cols-3 mt-4">
+          <div><Label>{lang === 'fr' ? 'Pays' : 'Country'}</Label><Input value={country} onChange={(e) => setCountry(e.target.value)} className="mt-1" /></div>
+          <div><Label>{lang === 'fr' ? 'Province' : 'Province'}</Label>
+            {country === 'RD Congo'
+              ? <Select value={province} onValueChange={setProvince}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent className="max-h-60">{DRC_PROVINCES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+              : <Input value={province} onChange={(e) => setProvince(e.target.value)} className="mt-1" />}
+          </div>
+          <div><Label>{lang === 'fr' ? 'Ville' : 'City'}</Label><Input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1" /></div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <Button onClick={doSingle} disabled={busy} className="gap-2">{busy && !progress ? <><Loader2 className="h-4 w-4 animate-spin" />{at('importing')}</> : <><Globe className="h-4 w-4" />{at('import_btn')}</>}</Button>
+          <Button onClick={doQuick} disabled={busy} variant="outline" className="gap-2">{busy && progress ? <><Loader2 className="h-4 w-4 animate-spin" />{progress}</> : <><Sparkles className="h-4 w-4" />{at('quick')}</>}</Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">{lang === 'fr' ? 'Données réelles via Google Places (nom, adresse, GPS, note, photos). Les prix sont estimés et modifiables.' : 'Real data via Google Places (name, address, GPS, rating, photos). Prices are estimated and editable.'}</p>
+      </Card>
+
+      {result && (
+        <Card className="p-5 border">
+          <div className="flex flex-wrap gap-4 mb-4">
+            <Badge className="bg-primary text-primary-foreground">{result.imported} {at('imported_label')}</Badge>
+            <Badge variant="secondary">{result.updated} {at('updated_label')}</Badge>
+            <Badge variant="outline">{result.fetched} {at('fetched_label')}</Badge>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {(result.hotels || []).slice(0, 24).map((h, i) => (
+              <div key={h.id || i} className="rounded-xl border overflow-hidden">
+                <img src={h.images[0]} alt={h.name} className="h-32 w-full object-cover bg-muted" loading="lazy" />
+                <div className="p-3">
+                  <div className="font-semibold text-sm leading-tight line-clamp-1">{h.name}</div>
+                  <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{h.address}</div>
+                  <div className="flex items-center gap-1 text-xs mt-1"><Star className="h-3 w-3 fill-[#F4B400] text-[#F4B400]" />{h.rating || '—'} · {h.reviewCount || 0} avis</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

@@ -1,473 +1,328 @@
 #!/usr/bin/env python3
 """
-Backend API Test for YABISO HOTELS - Agent/Field-agent endpoints
-Tests all agent-related endpoints with comprehensive scenarios
+Backend test for YABISO HOTELS - Google Places Import Integration
+Tests the REAL Google Places API integration
 """
-
 import requests
 import json
-import re
-from datetime import datetime
+from urllib.parse import urlparse, parse_qs, unquote
 
 # Base URL from .env
 BASE_URL = "https://yabiso-hotels.preview.emergentagent.com/api"
 
-def print_test(scenario, status, details=""):
-    """Print test result"""
-    symbol = "✅" if status == "PASS" else "❌"
-    print(f"\n{symbol} Scenario {scenario}: {status}")
-    if details:
-        print(f"   {details}")
-
-def check_no_mongo_id(data, path=""):
-    """Recursively check for _id field in response"""
-    if isinstance(data, dict):
-        if "_id" in data:
-            return False, f"Found _id at {path}"
-        for key, value in data.items():
-            result, msg = check_no_mongo_id(value, f"{path}.{key}")
-            if not result:
-                return result, msg
-    elif isinstance(data, list):
-        for i, item in enumerate(data):
-            result, msg = check_no_mongo_id(item, f"{path}[{i}]")
-            if not result:
-                return result, msg
-    return True, ""
-
-def test_agent_endpoints():
-    """Test all agent-related endpoints"""
-    print("=" * 80)
-    print("YABISO HOTELS - Agent/Field-agent Backend API Tests")
-    print("=" * 80)
+def test_google_places_import():
+    """Test Google Places import integration with REAL API"""
+    print("\n" + "="*80)
+    print("TESTING GOOGLE PLACES IMPORT INTEGRATION")
+    print("="*80)
     
-    agent_id = None
-    hotel_id = None
-    
-    # Scenario 1: POST /api/agents/login - create new agent
-    print("\n--- Scenario 1: Agent Login (Create) ---")
+    # Step 1: Create/get an agent
+    print("\n[STEP 1] Creating/getting agent...")
     try:
-        payload = {
-            "name": "Field Agent",
-            "email": "field1@yabiso.com",
-            "zone": "Nord-Kivu"
+        agent_payload = {
+            "name": "Import Agent",
+            "email": "import@yabiso.com",
+            "zone": "Kinshasa"
         }
-        response = requests.post(f"{BASE_URL}/agents/login", json=payload)
+        response = requests.post(f"{BASE_URL}/agents/login", json=agent_payload, timeout=30)
         print(f"Status: {response.status_code}")
         
-        if response.status_code == 200:
-            agent = response.json()
-            print(f"Response: {json.dumps(agent, indent=2)}")
-            
-            # Validate response structure
-            assert "id" in agent, "Missing id field"
-            assert "name" in agent, "Missing name field"
-            assert "email" in agent, "Missing email field"
-            assert "code" in agent, "Missing code field"
-            assert "zone" in agent, "Missing zone field"
-            
-            # Validate values
-            assert agent["name"] == "Field Agent", f"Name mismatch: {agent['name']}"
-            assert agent["email"] == "field1@yabiso.com", f"Email mismatch: {agent['email']}"
-            assert agent["zone"] == "Nord-Kivu", f"Zone mismatch: {agent['zone']}"
-            
-            # Validate code format (AG-XXXX)
-            code_pattern = r"^AG-[A-Z0-9]{4}$"
-            assert re.match(code_pattern, agent["code"]), f"Code format invalid: {agent['code']}"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(agent)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            agent_id = agent["id"]
-            first_agent_id = agent["id"]
-            
-            print_test("1a", "PASS", f"Agent created: id={agent_id}, code={agent['code']}")
-        else:
-            print_test("1a", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("1a", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 1b: POST /api/agents/login - same email (find-or-create)
-    print("\n--- Scenario 1b: Agent Login (Find existing) ---")
-    try:
-        payload = {
-            "name": "Field Agent",
-            "email": "field1@yabiso.com",
-            "zone": "Nord-Kivu"
-        }
-        response = requests.post(f"{BASE_URL}/agents/login", json=payload)
-        print(f"Status: {response.status_code}")
+        if response.status_code != 200:
+            print(f"❌ FAIL - Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
         
-        if response.status_code == 200:
-            agent = response.json()
-            print(f"Response: {json.dumps(agent, indent=2)}")
-            
-            # Must return SAME agent id
-            assert agent["id"] == first_agent_id, f"Agent ID changed! Expected {first_agent_id}, got {agent['id']}"
-            
-            print_test("1b", "PASS", f"Same agent returned: id={agent['id']} (find-or-create working)")
-        else:
-            print_test("1b", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("1b", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 1c: POST /api/agents/login - missing email (validation)
-    print("\n--- Scenario 1c: Agent Login (Missing email) ---")
-    try:
-        payload = {
-            "name": "Test Agent"
-        }
-        response = requests.post(f"{BASE_URL}/agents/login", json=payload)
-        print(f"Status: {response.status_code}")
+        agent = response.json()
+        agent_id = agent.get('id')
+        print(f"✅ PASS - Agent created/retrieved: {agent.get('name')} (ID: {agent_id})")
+        print(f"   Agent code: {agent.get('code')}, Zone: {agent.get('zone')}")
         
-        if response.status_code == 400:
-            print_test("1c", "PASS", "Validation working: 400 for missing email")
-        else:
-            print_test("1c", "FAIL", f"Expected 400, got {response.status_code}")
-    except Exception as e:
-        print_test("1c", "FAIL", f"Exception: {str(e)}")
-    
-    # Scenario 2: GET /api/agents/:id
-    print("\n--- Scenario 2: Get Agent by ID ---")
-    try:
-        response = requests.get(f"{BASE_URL}/agents/{agent_id}")
-        print(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            agent = response.json()
-            print(f"Response: {json.dumps(agent, indent=2)}")
+        if not agent_id:
+            print("❌ FAIL - No agent ID returned")
+            return False
             
-            assert agent["id"] == agent_id, f"ID mismatch"
-            assert agent["name"] == "Field Agent", f"Name mismatch"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(agent)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            print_test("2a", "PASS", f"Agent retrieved: {agent['name']}")
-        else:
-            print_test("2a", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
     except Exception as e:
-        print_test("2a", "FAIL", f"Exception: {str(e)}")
-        return
+        print(f"❌ FAIL - Agent creation error: {str(e)}")
+        return False
     
-    # Scenario 2b: GET /api/agents/:id - unknown id (404)
-    print("\n--- Scenario 2b: Get Agent (Unknown ID) ---")
+    # Step 2: Import hotels from Google Places
+    print("\n[STEP 2] Importing hotels from Google Places (Kinshasa)...")
     try:
-        response = requests.get(f"{BASE_URL}/agents/unknown-id-12345")
-        print(f"Status: {response.status_code}")
-        
-        if response.status_code == 404:
-            print_test("2b", "PASS", "404 for unknown agent ID")
-        else:
-            print_test("2b", "FAIL", f"Expected 404, got {response.status_code}")
-    except Exception as e:
-        print_test("2b", "FAIL", f"Exception: {str(e)}")
-    
-    # Scenario 3: POST /api/hotels (create property)
-    print("\n--- Scenario 3: Create Property ---")
-    try:
-        payload = {
-            "name": "Goma Test Inn",
-            "type": "hotel",
+        import_payload = {
+            "city": "Kinshasa",
+            "province": "Kinshasa",
             "country": "RD Congo",
-            "province": "Nord-Kivu",
-            "city": "Goma",
             "region": "Afrique Centrale",
-            "description": "Test",
             "agentId": agent_id,
-            "amenities": ["wifi", "parking"],
-            "images": ["https://example.com/a.jpg"],
-            "lat": "-1.6792",
-            "lng": "29.2228",
-            "rooms": [
-                {
-                    "name": "Standard",
-                    "priceCDF": "120000",
-                    "capacity": 2,
-                    "beds": "1 lit"
-                },
-                {
-                    "name": "Suite",
-                    "priceCDF": "250000",
-                    "capacity": 4,
-                    "beds": "2 lits"
-                }
-            ]
+            "max": 10
         }
-        response = requests.post(f"{BASE_URL}/hotels", json=payload)
+        response = requests.post(f"{BASE_URL}/import/hotels", json=import_payload, timeout=60)
         print(f"Status: {response.status_code}")
         
-        if response.status_code == 200:
-            hotel = response.json()
-            print(f"Response: {json.dumps(hotel, indent=2, default=str)}")
-            
-            # Validate structure
-            assert "id" in hotel, "Missing id"
-            assert hotel["name"] == "Goma Test Inn", f"Name mismatch"
-            assert hotel["verified"] == False, f"Should be unverified initially"
-            assert hotel["agentId"] == agent_id, f"AgentId mismatch"
-            
-            # Check priceCDF is min room price
-            assert hotel["priceCDF"] == 120000, f"priceCDF should be 120000 (min room), got {hotel['priceCDF']}"
-            
-            # Check rooms have generated IDs
-            assert len(hotel["rooms"]) == 2, f"Should have 2 rooms"
-            for room in hotel["rooms"]:
-                assert "id" in room, "Room missing id"
-                assert "name" in room, "Room missing name"
-                assert "priceCDF" in room, "Room missing priceCDF"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(hotel)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            hotel_id = hotel["id"]
-            
-            print_test("3a", "PASS", f"Property created: id={hotel_id}, priceCDF={hotel['priceCDF']}, rooms={len(hotel['rooms'])}")
-        else:
-            print_test("3a", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("3a", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 3b: POST /api/hotels - missing required field
-    print("\n--- Scenario 3b: Create Property (Missing city) ---")
-    try:
-        payload = {
-            "name": "Test Hotel",
-            "province": "Nord-Kivu",
-            "country": "RD Congo",
-            "agentId": agent_id
-            # Missing city
+        # Check for Google API errors (502 with error message)
+        if response.status_code == 502:
+            error_data = response.json()
+            error_msg = error_data.get('error', '')
+            print(f"⚠️  GOOGLE API ERROR (502): {error_msg}")
+            print(f"   This indicates a Google API configuration issue:")
+            print(f"   - If 'PERMISSION_DENIED' or 'REQUEST_DENIED': API key may need Places API (New) enabled")
+            print(f"   - If 'billing': Billing must be enabled on Google Cloud project")
+            print(f"   - Exact error: {error_msg}")
+            return False
+        
+        if response.status_code != 200:
+            print(f"❌ FAIL - Expected 200, got {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+        
+        import_result = response.json()
+        print(f"✅ PASS - Import successful!")
+        print(f"   City: {import_result.get('city')}")
+        print(f"   Fetched: {import_result.get('fetched')} places from Google")
+        print(f"   Imported: {import_result.get('imported')} new hotels")
+        print(f"   Updated: {import_result.get('updated')} existing hotels")
+        print(f"   Total hotels in response: {len(import_result.get('hotels', []))}")
+        
+        hotels = import_result.get('hotels', [])
+        if len(hotels) == 0:
+            print("❌ FAIL - No hotels returned")
+            return False
+        
+        # Step 2a: Validate hotel structure
+        print("\n[STEP 2a] Validating hotel structure...")
+        sample_hotel = hotels[0]
+        print(f"   Sample hotel: {sample_hotel.get('name')}")
+        
+        required_fields = {
+            'id': str,
+            'name': str,
+            'address': str,
+            'lat': (int, float),
+            'lng': (int, float),
+            'rating': (int, float),
+            'reviewCount': int,
+            'images': list,
+            'rooms': list,
+            'priceCDF': (int, float),
+            'source': str,
+            'externalId': str,
+            'verified': bool
         }
-        response = requests.post(f"{BASE_URL}/hotels", json=payload)
-        print(f"Status: {response.status_code}")
         
-        if response.status_code == 400:
-            print_test("3b", "PASS", "Validation working: 400 for missing city")
+        validation_passed = True
+        for field, expected_type in required_fields.items():
+            if field not in sample_hotel:
+                print(f"   ❌ Missing field: {field}")
+                validation_passed = False
+            elif not isinstance(sample_hotel[field], expected_type):
+                print(f"   ❌ Field {field} has wrong type: {type(sample_hotel[field])} (expected {expected_type})")
+                validation_passed = False
+        
+        # Check specific validations
+        if sample_hotel.get('name', '').strip() == '':
+            print(f"   ❌ Hotel name is empty")
+            validation_passed = False
+        
+        if sample_hotel.get('address', '').strip() == '':
+            print(f"   ❌ Hotel address is empty")
+            validation_passed = False
+        
+        if sample_hotel.get('lat') == 0 or sample_hotel.get('lng') == 0:
+            print(f"   ⚠️  WARNING: lat/lng is zero (lat={sample_hotel.get('lat')}, lng={sample_hotel.get('lng')})")
+        
+        if sample_hotel.get('source') != 'google_places':
+            print(f"   ❌ Source is not 'google_places': {sample_hotel.get('source')}")
+            validation_passed = False
+        
+        if sample_hotel.get('verified') != False:
+            print(f"   ❌ Verified should be False: {sample_hotel.get('verified')}")
+            validation_passed = False
+        
+        # Check images
+        images = sample_hotel.get('images', [])
+        if len(images) == 0:
+            print(f"   ❌ No images in hotel")
+            validation_passed = False
         else:
-            print_test("3b", "FAIL", f"Expected 400, got {response.status_code}")
+            first_image = images[0]
+            if not isinstance(first_image, str):
+                print(f"   ❌ Image is not a string: {type(first_image)}")
+                validation_passed = False
+            elif not first_image.startswith('/api/hotel-photo?name='):
+                print(f"   ❌ Image URL doesn't start with '/api/hotel-photo?name=': {first_image}")
+                validation_passed = False
+            else:
+                print(f"   ✅ Image URL format correct: {first_image[:50]}...")
+        
+        # Check rooms
+        rooms = sample_hotel.get('rooms', [])
+        if len(rooms) != 3:
+            print(f"   ❌ Expected 3 rooms, got {len(rooms)}")
+            validation_passed = False
+        else:
+            print(f"   ✅ Rooms count correct: 3")
+        
+        # Check priceCDF
+        if sample_hotel.get('priceCDF', 0) <= 0:
+            print(f"   ❌ priceCDF should be > 0: {sample_hotel.get('priceCDF')}")
+            validation_passed = False
+        
+        # Check for Mongo _id
+        if '_id' in sample_hotel:
+            print(f"   ❌ Mongo _id field present in response")
+            validation_passed = False
+        
+        if validation_passed:
+            print(f"   ✅ PASS - Hotel structure validation passed")
+            print(f"   Hotel details:")
+            print(f"      Name: {sample_hotel.get('name')}")
+            print(f"      Address: {sample_hotel.get('address')}")
+            print(f"      Lat/Lng: {sample_hotel.get('lat')}, {sample_hotel.get('lng')}")
+            print(f"      Rating: {sample_hotel.get('rating')} ({sample_hotel.get('reviewCount')} reviews)")
+            print(f"      Price: {sample_hotel.get('priceCDF')} CDF")
+            print(f"      External ID: {sample_hotel.get('externalId')}")
+        else:
+            print(f"   ❌ FAIL - Hotel structure validation failed")
+            return False
+        
+        # Store for later tests
+        first_hotel_image = images[0] if images else None
+        
     except Exception as e:
-        print_test("3b", "FAIL", f"Exception: {str(e)}")
+        print(f"❌ FAIL - Import error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
     
-    # Scenario 4: GET /api/agents/:id/hotels
-    print("\n--- Scenario 4: Get Agent's Hotels ---")
+    # Step 3: Test idempotency - call same import again
+    print("\n[STEP 3] Testing idempotency (calling same import again)...")
     try:
-        response = requests.get(f"{BASE_URL}/agents/{agent_id}/hotels")
+        response = requests.post(f"{BASE_URL}/import/hotels", json=import_payload, timeout=60)
         print(f"Status: {response.status_code}")
         
-        if response.status_code == 200:
-            hotels = response.json()
-            print(f"Response: {len(hotels)} hotels")
-            
-            assert isinstance(hotels, list), "Should return array"
-            assert len(hotels) >= 1, "Should have at least 1 hotel"
-            
-            # Find our created hotel
-            found = False
-            for h in hotels:
-                if h["id"] == hotel_id:
-                    found = True
-                    assert h["name"] == "Goma Test Inn", "Hotel name mismatch"
-                    break
-            
-            assert found, "Created hotel not found in agent's hotels"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(hotels)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            print_test("4", "PASS", f"Agent has {len(hotels)} hotel(s)")
+        if response.status_code != 200:
+            print(f"❌ FAIL - Expected 200, got {response.status_code}")
+            return False
+        
+        import_result2 = response.json()
+        print(f"   Fetched: {import_result2.get('fetched')}")
+        print(f"   Imported: {import_result2.get('imported')}")
+        print(f"   Updated: {import_result2.get('updated')}")
+        
+        # Second call should have updated > 0 (or imported smaller)
+        if import_result2.get('updated', 0) > 0:
+            print(f"   ✅ PASS - Idempotency working: {import_result2.get('updated')} hotels updated (not duplicated)")
+        elif import_result2.get('imported', 0) < import_result.get('imported', 0):
+            print(f"   ✅ PASS - Idempotency working: fewer hotels imported on second call")
         else:
-            print_test("4", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
+            print(f"   ⚠️  WARNING - Expected updated > 0 or imported to decrease")
+        
+        # Step 3a: Verify no duplicates by checking externalId
+        print("\n[STEP 3a] Verifying no duplicate hotels by externalId...")
+        response = requests.get(f"{BASE_URL}/hotels?q=Kinshasa", timeout=30)
+        if response.status_code == 200:
+            all_hotels = response.json()
+            external_ids = [h.get('externalId') for h in all_hotels if h.get('externalId')]
+            unique_external_ids = set(external_ids)
+            
+            if len(external_ids) == len(unique_external_ids):
+                print(f"   ✅ PASS - No duplicate externalIds found ({len(external_ids)} hotels)")
+            else:
+                print(f"   ❌ FAIL - Duplicate externalIds found: {len(external_ids)} total, {len(unique_external_ids)} unique")
+                return False
+        else:
+            print(f"   ⚠️  WARNING - Could not verify duplicates (GET /hotels failed)")
+        
     except Exception as e:
-        print_test("4", "FAIL", f"Exception: {str(e)}")
-        return
+        print(f"❌ FAIL - Idempotency test error: {str(e)}")
+        return False
     
-    # Scenario 5: GET /api/agents/:id/stats (before verify)
-    print("\n--- Scenario 5: Get Agent Stats (Before Verify) ---")
+    # Step 4: Test photo proxy
+    print("\n[STEP 4] Testing photo proxy...")
+    if not first_hotel_image:
+        print("   ⚠️  SKIP - No image URL available from import")
+    else:
+        try:
+            # Extract photo name from URL
+            # Format: /api/hotel-photo?name=<encoded_name>&w=1000
+            parsed = urlparse(first_hotel_image)
+            query_params = parse_qs(parsed.query)
+            photo_name = query_params.get('name', [None])[0]
+            
+            if not photo_name:
+                print(f"   ❌ FAIL - Could not extract photo name from URL: {first_hotel_image}")
+                return False
+            
+            # URL decode the photo name
+            photo_name_decoded = unquote(photo_name)
+            print(f"   Photo name (decoded): {photo_name_decoded[:60]}...")
+            
+            # Call photo proxy with w=400
+            photo_url = f"{BASE_URL}/hotel-photo?name={photo_name}&w=400"
+            response = requests.get(photo_url, timeout=30)
+            print(f"   Status: {response.status_code}")
+            
+            if response.status_code == 502:
+                print(f"   ❌ FAIL - Photo proxy returned 502")
+                print(f"   Response: {response.text}")
+                return False
+            
+            if response.status_code != 200:
+                print(f"   ❌ FAIL - Expected 200, got {response.status_code}")
+                print(f"   Response: {response.text}")
+                return False
+            
+            content_type = response.headers.get('Content-Type', '')
+            print(f"   Content-Type: {content_type}")
+            
+            if not content_type.startswith('image/'):
+                print(f"   ❌ FAIL - Content-Type should start with 'image/', got: {content_type}")
+                return False
+            
+            content_length = len(response.content)
+            print(f"   Content-Length: {content_length} bytes")
+            
+            if content_length < 100:
+                print(f"   ❌ FAIL - Image too small, likely not a real image")
+                return False
+            
+            print(f"   ✅ PASS - Photo proxy working correctly")
+            
+        except Exception as e:
+            print(f"   ❌ FAIL - Photo proxy error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    # Step 5: Test validation - missing city
+    print("\n[STEP 5] Testing validation (missing city)...")
     try:
-        response = requests.get(f"{BASE_URL}/agents/{agent_id}/stats")
+        response = requests.post(f"{BASE_URL}/import/hotels", json={}, timeout=30)
         print(f"Status: {response.status_code}")
         
-        if response.status_code == 200:
-            stats = response.json()
-            print(f"Response: {json.dumps(stats, indent=2)}")
-            
-            assert "properties" in stats, "Missing properties"
-            assert "verified" in stats, "Missing verified"
-            assert "rooms" in stats, "Missing rooms"
-            assert "activities" in stats, "Missing activities"
-            
-            assert stats["properties"] == 1, f"Should have 1 property, got {stats['properties']}"
-            assert stats["verified"] == 0, f"Should have 0 verified, got {stats['verified']}"
-            assert stats["rooms"] == 2, f"Should have 2 rooms, got {stats['rooms']}"
-            assert stats["activities"] >= 2, f"Should have >=2 activities (agent_registered + property_created), got {stats['activities']}"
-            
-            print_test("5", "PASS", f"Stats: properties={stats['properties']}, verified={stats['verified']}, rooms={stats['rooms']}, activities={stats['activities']}")
-        else:
-            print_test("5", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("5", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 6: POST /api/hotels/:id/verify
-    print("\n--- Scenario 6: Verify Property (GPS) ---")
-    try:
-        payload = {
-            "agentId": agent_id,
-            "lat": -1.68,
-            "lng": 29.22
-        }
-        response = requests.post(f"{BASE_URL}/hotels/{hotel_id}/verify", json=payload)
-        print(f"Status: {response.status_code}")
+        if response.status_code != 400:
+            print(f"   ❌ FAIL - Expected 400, got {response.status_code}")
+            return False
         
-        if response.status_code == 200:
-            hotel = response.json()
-            print(f"Response: {json.dumps(hotel, indent=2, default=str)}")
-            
-            assert hotel["verified"] == True, f"Should be verified"
-            assert "verification" in hotel, "Missing verification object"
-            
-            verification = hotel["verification"]
-            assert verification["agentId"] == agent_id, "Verification agentId mismatch"
-            assert verification["lat"] == -1.68, f"Verification lat mismatch"
-            assert verification["lng"] == 29.22, f"Verification lng mismatch"
-            assert "at" in verification, "Missing verification timestamp"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(hotel)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            print_test("6", "PASS", f"Property verified: lat={verification['lat']}, lng={verification['lng']}")
-        else:
-            print_test("6", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("6", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 7: GET /api/agents/:id/stats (after verify)
-    print("\n--- Scenario 7: Get Agent Stats (After Verify) ---")
-    try:
-        response = requests.get(f"{BASE_URL}/agents/{agent_id}/stats")
-        print(f"Status: {response.status_code}")
+        error_data = response.json()
+        print(f"   Error message: {error_data.get('error')}")
+        print(f"   ✅ PASS - Validation working correctly")
         
-        if response.status_code == 200:
-            stats = response.json()
-            print(f"Response: {json.dumps(stats, indent=2)}")
-            
-            assert stats["verified"] == 1, f"Should have 1 verified property, got {stats['verified']}"
-            
-            print_test("7", "PASS", f"Stats updated: verified={stats['verified']}")
-        else:
-            print_test("7", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
     except Exception as e:
-        print_test("7", "FAIL", f"Exception: {str(e)}")
-        return
+        print(f"   ❌ FAIL - Validation test error: {str(e)}")
+        return False
     
-    # Scenario 8: PUT /api/hotels/:id (update property)
-    print("\n--- Scenario 8: Update Property ---")
-    try:
-        payload = {
-            "agentId": agent_id,
-            "description": "Updated desc",
-            "rooms": [
-                {
-                    "name": "Eco",
-                    "priceCDF": "90000",
-                    "capacity": 2,
-                    "beds": "1 lit"
-                }
-            ]
-        }
-        response = requests.put(f"{BASE_URL}/hotels/{hotel_id}", json=payload)
-        print(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            hotel = response.json()
-            print(f"Response: {json.dumps(hotel, indent=2, default=str)}")
-            
-            assert hotel["description"] == "Updated desc", f"Description not updated"
-            assert hotel["priceCDF"] == 90000, f"priceCDF should be 90000 (recomputed min), got {hotel['priceCDF']}"
-            assert len(hotel["rooms"]) == 1, f"Should have 1 room after update"
-            assert hotel["rooms"][0]["name"] == "Eco", f"Room name mismatch"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(hotel)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            print_test("8", "PASS", f"Property updated: description='{hotel['description']}', priceCDF={hotel['priceCDF']}")
-        else:
-            print_test("8", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("8", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 9: GET /api/agents/:id/activities
-    print("\n--- Scenario 9: Get Agent Activities ---")
-    try:
-        response = requests.get(f"{BASE_URL}/agents/{agent_id}/activities")
-        print(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            activities = response.json()
-            print(f"Response: {len(activities)} activities")
-            
-            assert isinstance(activities, list), "Should return array"
-            assert len(activities) >= 4, f"Should have >=4 activities (registered, created, verified, updated), got {len(activities)}"
-            
-            # Check activity types
-            types = [a["type"] for a in activities]
-            assert "agent_registered" in types, "Missing agent_registered activity"
-            assert "property_created" in types, "Missing property_created activity"
-            assert "property_verified" in types, "Missing property_verified activity"
-            assert "property_updated" in types, "Missing property_updated activity"
-            
-            # Check sorted desc (newest first)
-            for i in range(len(activities) - 1):
-                current = datetime.fromisoformat(activities[i]["createdAt"].replace("Z", "+00:00"))
-                next_act = datetime.fromisoformat(activities[i+1]["createdAt"].replace("Z", "+00:00"))
-                assert current >= next_act, "Activities not sorted desc by createdAt"
-            
-            # Check property_verified has lat/lng in meta
-            verified_act = next((a for a in activities if a["type"] == "property_verified"), None)
-            assert verified_act is not None, "property_verified activity not found"
-            assert "meta" in verified_act, "Missing meta in property_verified"
-            assert "lat" in verified_act["meta"], "Missing lat in property_verified meta"
-            assert "lng" in verified_act["meta"], "Missing lng in property_verified meta"
-            
-            # Check no _id
-            no_id, msg = check_no_mongo_id(activities)
-            assert no_id, f"Mongo _id found: {msg}"
-            
-            print_test("9", "PASS", f"Activities: {len(activities)} total, types={set(types)}, property_verified meta has lat/lng")
-        else:
-            print_test("9", "FAIL", f"Status {response.status_code}: {response.text}")
-            return
-    except Exception as e:
-        print_test("9", "FAIL", f"Exception: {str(e)}")
-        return
-    
-    # Scenario 10: Confirm no _id in all responses (already checked in each scenario)
-    print("\n--- Scenario 10: No Mongo _id Field ---")
-    print_test("10", "PASS", "All responses checked - no _id field found in any response")
-    
-    print("\n" + "=" * 80)
-    print("ALL AGENT ENDPOINT TESTS COMPLETED SUCCESSFULLY")
-    print("=" * 80)
+    print("\n" + "="*80)
+    print("✅ ALL GOOGLE PLACES IMPORT TESTS PASSED")
+    print("="*80)
+    return True
 
 if __name__ == "__main__":
-    test_agent_endpoints()
+    try:
+        success = test_google_places_import()
+        exit(0 if success else 1)
+    except Exception as e:
+        print(f"\n❌ FATAL ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        exit(1)

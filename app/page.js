@@ -1239,12 +1239,9 @@ function App() {
   const Header = () => (
     <header className="sticky top-0 z-50 w-full border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="container flex h-16 items-center justify-between gap-4">
-        <button onClick={() => { goto('home'); loadHotels() }} className="flex items-center gap-2 shrink-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-extrabold">Y</div>
-          <div className="text-left leading-none">
-            <div className="text-lg font-extrabold tracking-tight">YABISO<span className="text-[#F4B400]"> HOTELS</span></div>
-            <div className="text-[10px] text-muted-foreground hidden sm:block">Powered by BissaGlobal Services</div>
-          </div>
+        <button onClick={() => { goto('home'); loadHotels() }} className="flex items-center shrink-0">
+          <img src="/logo2.png" alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain block dark:hidden" />
+          <img src="/logo1.png" alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain hidden dark:block" />
         </button>
 
         <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
@@ -1913,7 +1910,8 @@ function App() {
     <footer className="border-t bg-muted/30 mt-10">
       <div className="container py-12 grid gap-8 md:grid-cols-4">
         <div>
-          <div className="text-lg font-extrabold">YABISO<span className="text-[#F4B400]"> HOTELS</span></div>
+          <img src="/logo2.png" alt="YABISO HOTELS" className="h-16 w-auto object-contain block dark:hidden" />
+          <img src="/logo1.png" alt="YABISO HOTELS" className="h-16 w-auto object-contain hidden dark:block" />
           <p className="text-sm text-muted-foreground mt-2">Réservez • Séjournez • Découvrez l'Afrique</p>
           <p className="text-xs text-muted-foreground mt-3">Powered by BissaGlobal Services</p>
         </div>

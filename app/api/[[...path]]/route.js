@@ -2,6 +2,7 @@ import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import IMPORTED_HOTELS from './importedHotels.json'
 
 // ---------------- Auth helpers (simple JWT-like HMAC) ----------------
 const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
@@ -187,6 +188,7 @@ async function getSettings(db) {
     await db.collection('settings').insertOne(s)
   }
   if (typeof s.commission !== 'number') s.commission = DEFAULT_COMMISSION
+  s.rates = { ...DEFAULT_RATES, ...(s.rates || {}) }
   const { _id, ...rest } = s
   return rest
 }
@@ -269,9 +271,36 @@ async function migrateFeatureCongo(db) {
   } catch (e) { console.error('[migrate] featureCongo failed', e?.message || e) }
 }
 
+async function seedImportedHotels(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.importedHotelsV1) return
+    let inserted = 0
+    for (const h of (IMPORTED_HOTELS || [])) {
+      if (!h || !h.externalId) continue
+      const exists = await db.collection('hotels').findOne({ externalId: h.externalId })
+      if (!exists) {
+        await db.collection('hotels').insertOne({
+          ...h,
+          id: h.id || uuidv4(),
+          featured: /congo/i.test(h.country || '') ? true : !!h.featured,
+          createdAt: h.createdAt ? new Date(h.createdAt) : new Date(),
+        })
+        inserted++
+      }
+    }
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', importedHotelsV1: true } }, { upsert: true })
+    console.log('[migrate] seedImportedHotels inserted', inserted)
+  } catch (e) { console.error('[migrate] seedImportedHotels failed', e?.message || e) }
+}
+
 async function seed(db) {
   const count = await db.collection('hotels').countDocuments()
-  if (count > 0) { await migrateFeatureCongo(db); return { seeded: false, hotels: count } }
+  if (count > 0) {
+    await migrateFeatureCongo(db)
+    await seedImportedHotels(db)
+    return { seeded: false, hotels: await db.collection('hotels').countDocuments() }
+  }
   const hotels = buildHotels()
   await db.collection('hotels').insertMany(hotels.map((h) => ({ ...h })))
   const reviews = []
@@ -284,6 +313,7 @@ async function seed(db) {
   }
   await db.collection('reviews').insertMany(reviews)
   await getSettings(db)
+  await seedImportedHotels(db)
   return { seeded: true, hotels: hotels.length, reviews: reviews.length }
 }
 

@@ -91,8 +91,8 @@ const AMENITIES = {
   breakfast: { icon: Coffee, fr: 'Petit-déjeuner', en: 'Breakfast' },
 }
 
-const CURRENCIES = ['CDF', 'USD', 'EUR', 'GBP']
-const SYMBOLS = { CDF: 'FC', USD: '$', EUR: '€', GBP: '£' }
+const CURRENCIES = ['CDF', 'USD', 'EUR', 'GBP', 'XAF']
+const SYMBOLS = { CDF: 'FC', USD: '$', EUR: '€', GBP: '£', XAF: 'FCFA' }
 const PAYMENTS = [
   { id: 'visa', label: 'Visa' }, { id: 'mastercard', label: 'Mastercard' }, { id: 'stripe', label: 'Stripe' },
   { id: 'paypal', label: 'PayPal' }, { id: 'orange', label: 'Orange Money' }, { id: 'airtel', label: 'Airtel Money' },
@@ -799,7 +799,7 @@ function AdminDashboard({ lang, token, onBack }) {
   const [bookings, setBookings] = useState([])
   const [users, setUsers] = useState([])
   const [agents, setAgents] = useState([])
-  const [settings, setSettings] = useState({ rates: { USD: 2850, EUR: 3080, GBP: 3600 }, fee: 0.07, commission: 0.3 })
+  const [settings, setSettings] = useState({ rates: { USD: 2850, EUR: 3080, GBP: 3600, XAF: 4.7 }, fee: 0.07, commission: 0.3 })
   const H = { headers: { Authorization: 'Bearer ' + token } }
   const aFetch = (u, opts = {}) => fetch(u, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } })
 
@@ -954,7 +954,7 @@ function AdminDashboard({ lang, token, onBack }) {
           <Card className="p-5 border max-w-lg">
             <h3 className="font-bold mb-3">{lang === 'fr' ? 'Taux de change (CDF par unité)' : 'Exchange rates (CDF per unit)'}</h3>
             <div className="grid grid-cols-3 gap-3">
-              {['USD', 'EUR', 'GBP'].map((c) => (
+              {['USD', 'EUR', 'GBP', 'XAF'].map((c) => (
                 <div key={c}><Label>{c}</Label><Input type="number" value={settings.rates[c]} onChange={(e) => setSettings({ ...settings, rates: { ...settings.rates, [c]: parseFloat(e.target.value) || 0 } })} className="mt-1" /></div>
               ))}
             </div>

@@ -1167,6 +1167,7 @@ function App() {
     q: '', type: '', checkIn: fmtDateInput(new Date(today.getTime() + 86400000)),
     checkOut: fmtDateInput(new Date(today.getTime() + 3 * 86400000)), guests: 2,
   })
+  const [sugOpen, setSugOpen] = useState(false)
 
   const t = useCallback((k) => T[lang][k], [lang])
   const typeLabel = useCallback((ty) => T[lang].types[ty] || ty, [lang])
@@ -1215,9 +1216,17 @@ function App() {
     try { const r = await fetch('/api/hotels/' + id); setSelected(await r.json()) } catch (e) { console.error(e) }
   }
 
-  const doSearch = async () => {
-    await loadHotels({ q: search.q, type: search.type, guests: search.guests })
+  const doSearch = async (q) => {
+    const query = typeof q === 'string' ? q : search.q
+    setSugOpen(false)
+    await loadHotels({ q: query, type: search.type, guests: search.guests })
     goto('search')
+  }
+
+  const pickDest = (d) => {
+    setSearch((s) => ({ ...s, q: d.city }))
+    setSugOpen(false)
+    doSearch(d.city)
   }
 
   const toggleFav = (id) => {
@@ -1316,9 +1325,39 @@ function App() {
   /* ----------------------------- Search bar ----------------------------- */
   const SearchBar = ({ compact }) => (
     <div className={`bg-card text-card-foreground rounded-2xl shadow-xl border p-3 grid grid-cols-1 md:grid-cols-12 gap-2 ${compact ? '' : 'md:p-4'}`}>
-      <div className="md:col-span-4 flex flex-col gap-1">
+      <div className="md:col-span-4 flex flex-col gap-1 relative">
         <label className="text-[11px] font-semibold text-muted-foreground px-1 flex items-center gap-1"><MapPin className="h-3 w-3" />{t('f_dest')}</label>
-        <Input value={search.q} onChange={(e) => setSearch({ ...search, q: e.target.value })} placeholder={t('f_dest_ph')} className="h-11" onKeyDown={(e) => e.key === 'Enter' && doSearch()} />
+        <Input
+          value={search.q}
+          onChange={(e) => { setSearch({ ...search, q: e.target.value }); setSugOpen(true) }}
+          onFocus={() => setSugOpen(true)}
+          onBlur={() => setTimeout(() => setSugOpen(false), 150)}
+          placeholder={t('f_dest_ph')}
+          className="h-11"
+          autoComplete="off"
+          onKeyDown={(e) => { if (e.key === 'Enter') { setSugOpen(false); doSearch() } }}
+        />
+        {sugOpen && destSuggestions.length > 0 && (
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover text-popover-foreground border rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto text-left">
+            {destSuggestions.map((d, i) => (
+              <button
+                key={i}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); pickDest(d) }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-accent transition border-b last:border-b-0"
+              >
+                <div className="h-9 w-9 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                  {d.image ? <img src={d.image} alt="" className="h-full w-full object-cover" /> : <MapPin className="h-4 w-4 text-muted-foreground" />}
+                </div>
+                <div className="min-w-0 text-left">
+                  <div className="text-sm font-semibold truncate">{d.city}</div>
+                  <div className="text-xs text-muted-foreground truncate">{d.province ? d.province + ', ' : ''}{d.country}</div>
+                </div>
+                <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">{d.count} {lang === 'fr' ? 'hôtels' : 'hotels'}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="md:col-span-2 flex flex-col gap-1">
         <label className="text-[11px] font-semibold text-muted-foreground px-1 flex items-center gap-1"><CalIcon className="h-3 w-3" />{t('f_in')}</label>
@@ -1375,6 +1414,21 @@ function App() {
   const [destinations, setDestinations] = useState([])
   useEffect(() => { fetch('/api/destinations').then((r) => r.json()).then(setDestinations).catch(() => {}) }, [])
 
+  const destSuggestions = useMemo(() => {
+    const q = (search.q || '').trim().toLowerCase()
+    if (!q || !Array.isArray(destinations)) return []
+    const seen = new Set()
+    const out = []
+    for (const d of destinations) {
+      const hay = `${d.city || ''} ${d.province || ''} ${d.country || ''} ${d.region || ''}`.toLowerCase()
+      if (hay.includes(q)) {
+        const key = `${d.city}|${d.country}`
+        if (!seen.has(key)) { seen.add(key); out.push(d) }
+      }
+    }
+    return out.slice(0, 7)
+  }, [search.q, destinations])
+
   const featured = useMemo(() => hotels.filter((h) => h.featured).slice(0, 8), [hotels])
   const reviewsHome = useMemo(() => [
     { author: 'Jean-Marc K.', city: 'Kinshasa', rating: 5, fr: 'Réservation simple et paiement sécurisé. Mon hôtel à Kinshasa était parfait !', en: 'Easy booking and secure payment. My hotel in Kinshasa was perfect!' },
@@ -1394,7 +1448,7 @@ function App() {
           <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] mb-4 font-semibold">Réservez • Séjournez • Découvrez l'Afrique</Badge>
           <h1 className="text-4xl md:text-6xl font-extrabold text-white max-w-3xl leading-tight drop-shadow">{t('hero_title')}</h1>
           <p className="mt-4 text-lg text-white/90 max-w-2xl">{t('hero_sub')}</p>
-          <div className="mt-8 max-w-5xl"><SearchBar /></div>
+          <div className="mt-8 max-w-5xl">{SearchBar({})}</div>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/90">
             <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[#F4B400]" />Hôtels vérifiés</span>
             <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-[#F4B400]" />Paiement sécurisé multi-devises</span>
@@ -1516,7 +1570,7 @@ function App() {
   /* ----------------------------- SEARCH ----------------------------- */
   const SearchView = () => (
     <main className="container py-8">
-      <div className="mb-6"><SearchBar compact /></div>
+      <div className="mb-6">{SearchBar({ compact: true })}</div>
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <h2 className="text-xl font-bold">{hotels.length} {t('results')}{search.q ? ` · ${search.q}` : ''}</h2>
         <div className="ml-auto">
@@ -1990,8 +2044,8 @@ function App() {
     <div className="min-h-screen bg-background text-foreground">
       <AnnouncementBar lang={lang} onPartner={() => goto('partner')} />
       <Header />
-      {view === 'home' && <Home />}
-      {view === 'search' && <SearchView />}
+      {view === 'home' && Home()}
+      {view === 'search' && SearchView()}
       {view === 'hotel' && <HotelView />}
       {view === 'booking' && <BookingView />}
       {view === 'confirmation' && <ConfirmationView />}

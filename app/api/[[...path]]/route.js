@@ -180,6 +180,7 @@ export async function OPTIONS() {
 const DEFAULT_RATES = { USD: 2850, EUR: 3080, GBP: 3600, XAF: 4.7 }
 const DEFAULT_FEE = 0.07 // 7% markup on foreign currency payments
 const DEFAULT_COMMISSION = 0.3 // 30% YABISO commission
+const ONLINE_MARKUP = 1.2 // +20% markup applied to hotels imported online (Google Places)
 
 async function getSettings(db) {
   let s = await db.collection('settings').findOne({ id: 'global' })
@@ -832,7 +833,7 @@ async function handleRoute(request, { params }) {
         if (!name) continue
         const externalId = p.id
         const rating = typeof p.rating === 'number' ? Math.round(p.rating * 10) / 10 : 0
-        const base = priceTierFromRating(rating)
+        const base = Math.round(priceTierFromRating(rating) * ONLINE_MARKUP) // +20% online markup for imported hotels
         let images = googlePhotoUrls(p.photos)
         if (images.length === 0) images = ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
         const addr = p.formattedAddress || city

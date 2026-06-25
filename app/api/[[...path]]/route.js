@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 // ---------------- Auth helpers (simple JWT-like HMAC) ----------------
-const AUTH_SECRET = process.env.AUTH_SECRET || 'yabiso-bissaglobal-secret-2025'
+const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
 function signToken(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
   const sig = crypto.createHmac('sha256', AUTH_SECRET).update(body).digest('base64url')

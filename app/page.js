@@ -20,7 +20,7 @@ import {
   Star, MapPin, Search, Heart, Moon, Sun, Check, ShieldCheck, Phone, Calendar as CalIcon,
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
-  User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck,
+  User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -1120,6 +1120,29 @@ function OwnerDashboard({ lang, token, user, onBack }) {
   )
 }
 
+/* ---- Promo announcement bar (2 months free) ---- */
+function AnnouncementBar({ lang, onPartner }) {
+  const [open, setOpen] = useState(true)
+  useEffect(() => { try { if (localStorage.getItem('yabiso_promo_off') === '1') setOpen(false) } catch (e) {} }, [])
+  if (!open) return null
+  const close = () => { setOpen(false); try { localStorage.setItem('yabiso_promo_off', '1') } catch (e) {} }
+  return (
+    <div className="relative bg-gradient-to-r from-[#CE1126] via-[#0057B8] to-[#0057B8] text-white">
+      <div className="container flex items-center justify-center gap-3 py-2 text-sm font-medium text-center">
+        <PartyPopper className="h-4 w-4 text-[#F4B400] shrink-0" />
+        <span className="truncate sm:whitespace-normal">
+          <strong className="text-[#F4B400]">{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'}</strong>
+          {lang === 'fr' ? " — 0% de commission pour les nouveaux hôtels partenaires !" : ' — 0% commission for new partner hotels!'}
+        </span>
+        <button onClick={onPartner} className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#F4B400] text-black font-semibold px-3 py-1 text-xs hover:bg-[#d99f00] transition shrink-0">
+          {lang === 'fr' ? "J'en profite" : 'Claim offer'}<ArrowRight className="h-3 w-3" />
+        </button>
+      </div>
+      <button onClick={close} className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded-full hover:bg-white/20"><X className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+}
+
 /* =============================== APP =============================== */
 function App() {
   const [lang, setLang] = useState('fr')
@@ -1456,6 +1479,26 @@ function App() {
               </Card>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Promo banner: 2 months free */}
+      <section className="container py-6">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0057B8] via-[#0057B8] to-[#003a7a] text-white p-8 md:p-10">
+          <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#F4B400]/20 blur-2xl" />
+          <div className="absolute right-6 top-6 hidden md:block"><Gift className="h-24 w-24 text-[#F4B400]/30" /></div>
+          <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] font-bold mb-3 gap-1"><PartyPopper className="h-3.5 w-3.5" />{lang === 'fr' ? 'Offre de lancement' : 'Launch offer'}</Badge>
+          <h2 className="text-3xl md:text-4xl font-extrabold max-w-2xl">
+            {lang === 'fr' ? 'Hôteliers : ' : 'Hoteliers: '}
+            <span className="text-[#F4B400]">{lang === 'fr' ? '2 mois gratuits' : '2 months free'}</span>
+            {lang === 'fr' ? ' — 0% de commission' : ' — 0% commission'}
+          </h2>
+          <p className="mt-3 max-w-xl text-white/90">{lang === 'fr' ? "Inscrivez votre établissement aujourd'hui et ne payez aucune commission pendant 2 mois. Photographie professionnelle, vérification et marketing diaspora inclus." : 'List your property today and pay zero commission for 2 months. Professional photography, verification and diaspora marketing included.'}</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={() => goto('partner')} className="bg-[#F4B400] text-black hover:bg-[#d99f00] font-semibold gap-2">{lang === 'fr' ? "J'inscris mon hôtel" : 'List my hotel'}<ArrowRight className="h-4 w-4" /></Button>
+            <a href="https://wa.me/243990000000?text=YABISO%202%20mois%20gratuits" target="_blank" rel="noreferrer"><Button variant="outline" className="gap-2 border-white/40 text-white bg-white/10 hover:bg-white/20"><Phone className="h-4 w-4" />WhatsApp</Button></a>
+          </div>
+          <div className="mt-4 text-xs text-white/70">{lang === 'fr' ? "Offre limitée aux nouveaux partenaires. Conditions appliquées par YABISO HOTELS." : 'Limited to new partners. Terms apply by YABISO HOTELS.'}</div>
         </div>
       </section>
 
@@ -1881,6 +1924,10 @@ function App() {
         <h1 className="text-3xl md:text-4xl font-extrabold">{t('partner_title')}</h1>
         <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">{t('partner_sub')}</p>
       </div>
+      <div className="mb-10 rounded-2xl border-2 border-[#F4B400] bg-[#F4B400]/10 p-6 text-center">
+        <div className="flex items-center justify-center gap-2 text-2xl md:text-3xl font-extrabold"><Gift className="h-7 w-7 text-[#F4B400]" />{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'} <span className="text-primary">· 0% {lang === 'fr' ? 'commission' : 'commission'}</span></div>
+        <p className="text-muted-foreground mt-2">{lang === 'fr' ? "Pour tout nouvel hôtel inscrit dès maintenant. Aucune commission prélevée pendant vos 2 premiers mois." : 'For every new hotel listed now. No commission charged during your first 2 months.'}</p>
+      </div>
       <div className="grid gap-5 md:grid-cols-3 mb-10">
         {[
           { fr: 'Onboarding & photos pro', en: 'Onboarding & pro photos', icon: Building2 },
@@ -1941,6 +1988,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <AnnouncementBar lang={lang} onPartner={() => goto('partner')} />
       <Header />
       {view === 'home' && <Home />}
       {view === 'search' && <SearchView />}

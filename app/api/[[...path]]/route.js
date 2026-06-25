@@ -46,6 +46,94 @@ async function getAuthUser(db, request) {
   const u = await db.collection('users').findOne({ id: p.id })
   return u || null
 }
+
+// ---------------- Email notifications (Resend) ----------------
+import { Resend } from 'resend'
+const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const RESEND_FROM = process.env.RESEND_FROM || 'YABISO HOTELS <onboarding@resend.dev>'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'bissa@bgsrdc.om'
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null
+
+function emailLayout(title, bodyHtml) {
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+  <body style="margin:0;background:#f4f6fb;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+    <div style="max-width:600px;margin:0 auto;padding:24px;">
+      <div style="background:#1e3a8a;border-radius:12px 12px 0 0;padding:20px 24px;text-align:center;">
+        <h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:1px;">YABISO <span style="color:#fbbf24;">HOTELS</span></h1>
+      </div>
+      <div style="background:#ffffff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:28px 24px;">
+        <h2 style="margin:0 0 16px;color:#1e3a8a;font-size:18px;">${title}</h2>
+        ${bodyHtml}
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:18px;">© ${new Date().getFullYear()} YABISO HOTELS — Réservation d'hôtels en Afrique subsaharienne</p>
+    </div>
+  </body></html>`
+}
+
+async function sendEmailSafe({ to, subject, html }) {
+  if (!resendClient) { console.warn('[email] RESEND_API_KEY manquant, email non envoyé:', subject); return { skipped: true } }
+  try {
+    const recipients = Array.isArray(to) ? to : [to]
+    const { data, error } = await resendClient.emails.send({ from: RESEND_FROM, to: recipients, subject, html })
+    if (error) { console.error('[email] Erreur Resend:', subject, JSON.stringify(error)); return { error } }
+    return { data }
+  } catch (e) {
+    console.error('[email] Exception envoi:', subject, e?.message || e)
+    return { error: e?.message || 'send failed' }
+  }
+}
+
+// Fire-and-forget so the API response is never blocked or broken by email issues
+async function notifyRegistration(user) {
+  const adminHtml = emailLayout('Nouvelle inscription utilisateur', `
+    <p>Un nouvel utilisateur vient de créer un compte sur YABISO HOTELS :</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      <tr><td style="padding:6px 0;color:#6b7280;">Nom</td><td style="padding:6px 0;font-weight:bold;">${user.name || '-'}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Email</td><td style="padding:6px 0;font-weight:bold;">${user.email || '-'}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Date</td><td style="padding:6px 0;">${new Date().toLocaleString('fr-FR')}</td></tr>
+    </table>`)
+  const clientHtml = emailLayout(`Bienvenue ${user.name || ''} !`, `
+    <p>Merci de vous être inscrit sur <strong>YABISO HOTELS</strong>, votre marketplace de réservation d'hôtels en Afrique subsaharienne.</p>
+    <p>Votre compte a été créé avec succès avec l'adresse <strong>${user.email}</strong>.</p>
+    <p>Vous pouvez dès à présent rechercher et réserver les meilleurs hôtels.</p>
+    <p style="margin-top:20px;">À très bientôt,<br/>L'équipe YABISO HOTELS</p>`)
+  await Promise.all([
+    sendEmailSafe({ to: ADMIN_EMAIL, subject: 'Nouvelle inscription — ' + (user.name || user.email), html: adminHtml }),
+    user.email ? sendEmailSafe({ to: user.email, subject: 'Bienvenue sur YABISO HOTELS', html: clientHtml }) : Promise.resolve(),
+  ])
+}
+
+async function notifyBooking(booking) {
+  const fmt = (d) => { try { return new Date(d).toLocaleDateString('fr-FR') } catch { return d } }
+  const c = booking.customer || {}
+  const details = `
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      <tr><td style="padding:6px 0;color:#6b7280;">Référence</td><td style="padding:6px 0;font-weight:bold;">${booking.reference}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Hôtel</td><td style="padding:6px 0;font-weight:bold;">${booking.hotelName || '-'}${booking.hotelCity ? ' — ' + booking.hotelCity : ''}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Chambre</td><td style="padding:6px 0;">${booking.roomName || '-'}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Arrivée</td><td style="padding:6px 0;">${fmt(booking.checkIn)}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Départ</td><td style="padding:6px 0;">${fmt(booking.checkOut)}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Nuits</td><td style="padding:6px 0;">${booking.nights}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Voyageurs</td><td style="padding:6px 0;">${booking.guests}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Montant</td><td style="padding:6px 0;font-weight:bold;color:#1e3a8a;">${booking.totalDisplay} ${booking.currency}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Paiement</td><td style="padding:6px 0;">${booking.paymentMethod} (${booking.status})</td></tr>
+    </table>`
+  const adminHtml = emailLayout('Nouvelle réservation reçue', `
+    <p>Une nouvelle réservation vient d'être enregistrée :</p>
+    ${details}
+    <p style="margin-top:12px;color:#6b7280;">Client : <strong>${c.name || '-'}</strong> — ${c.email || '-'} — ${c.phone || '-'}</p>`)
+  const clientHtml = emailLayout(`Confirmation de réservation — ${booking.reference}`, `
+    <p>Bonjour ${c.name || ''},</p>
+    <p>Nous avons bien reçu votre demande de réservation sur <strong>YABISO HOTELS</strong>. Voici le récapitulatif :</p>
+    ${details}
+    <p style="margin-top:12px;">${booking.cancellationPolicy || ''}</p>
+    <p style="margin-top:16px;">Merci de votre confiance,<br/>L'équipe YABISO HOTELS</p>`)
+  await Promise.all([
+    sendEmailSafe({ to: ADMIN_EMAIL, subject: 'Nouvelle réservation — ' + booking.reference, html: adminHtml }),
+    c.email ? sendEmailSafe({ to: c.email, subject: 'Confirmation de votre réservation YABISO ' + booking.reference, html: clientHtml }) : Promise.resolve(),
+  ])
+}
+
 async function ensureAdmin(db) {
   const existing = await db.collection('users').findOne({ email: 'admin@yabiso.com' })
   if (!existing) {
@@ -354,6 +442,7 @@ async function handleRoute(request, { params }) {
       if (existing) return handleCORS(NextResponse.json({ error: 'Email déjà utilisé' }, { status: 409 }))
       const user = { id: uuidv4(), name, email: email.toLowerCase(), passwordHash: hashPassword(password), role: 'user', favorites: [], createdAt: new Date() }
       await db.collection('users').insertOne({ ...user })
+      notifyRegistration(user).catch((e) => console.error('[email] notifyRegistration failed', e?.message || e))
       const token = signToken({ id: user.id, role: user.role, exp: Date.now() + 30 * 86400000 })
       return handleCORS(NextResponse.json({ user: publicUser(user), token }))
     }
@@ -790,6 +879,7 @@ async function handleRoute(request, { params }) {
         createdAt: new Date()
       }
       await db.collection('bookings').insertOne({ ...booking })
+      notifyBooking(booking).catch((e) => console.error('[email] notifyBooking failed', e?.message || e))
       return handleCORS(NextResponse.json(booking))
     }
 

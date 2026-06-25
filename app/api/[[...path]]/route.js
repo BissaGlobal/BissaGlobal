@@ -176,7 +176,7 @@ export async function OPTIONS() {
 
 // ---------------- Exchange rates ----------------
 // Rates = how many CDF per 1 unit of foreign currency (configurable)
-const DEFAULT_RATES = { USD: 2850, EUR: 3080, GBP: 3600 }
+const DEFAULT_RATES = { USD: 2850, EUR: 3080, GBP: 3600, XAF: 4.7 }
 const DEFAULT_FEE = 0.07 // 7% markup on foreign currency payments
 const DEFAULT_COMMISSION = 0.3 // 30% YABISO commission
 
@@ -260,9 +260,18 @@ const REVIEW_POOL = [
   ['Fatou S.', 5, 'Cadre paradisiaque, équipe aux petits soins. Parfait pour les vacances.']
 ]
 
+async function migrateFeatureCongo(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.featureCongo) return
+    await db.collection('hotels').updateMany({ country: { $regex: 'congo', $options: 'i' } }, { $set: { featured: true } })
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', featureCongo: true } }, { upsert: true })
+  } catch (e) { console.error('[migrate] featureCongo failed', e?.message || e) }
+}
+
 async function seed(db) {
   const count = await db.collection('hotels').countDocuments()
-  if (count > 0) return { seeded: false, hotels: count }
+  if (count > 0) { await migrateFeatureCongo(db); return { seeded: false, hotels: count } }
   const hotels = buildHotels()
   await db.collection('hotels').insertMany(hotels.map((h) => ({ ...h })))
   const reviews = []
@@ -777,7 +786,9 @@ async function handleRoute(request, { params }) {
       const province = body.province || city
       const region = body.region || 'Afrique Centrale'
       const agentId = body.agentId || null
-      const googleCountry = country === 'RD Congo' ? 'Democratic Republic of Congo' : country
+      const googleCountry = country === 'RD Congo' ? 'Democratic Republic of Congo'
+        : /brazzaville|r[ée]publique du congo|congo-?brazza/i.test(country) ? 'Republic of the Congo'
+        : country
       let places
       try {
         places = await googleTextSearch('hotels and lodging in ' + city + ', ' + googleCountry, body.max || 20)
@@ -812,7 +823,7 @@ async function handleRoute(request, { params }) {
         } else {
           const enriched = await getPlaceAmenities(externalId)
           const amenities = enriched && enriched.length ? enriched : ['wifi', 'parking', 'restaurant', 'ac']
-          const hotel = { id: uuidv4(), ...docBase, priceCDF: base, verified: false, featured: false, amenities, rooms: rooms(base), agentId, createdAt: new Date() }
+          const hotel = { id: uuidv4(), ...docBase, priceCDF: base, verified: false, featured: /congo/i.test(country), amenities, rooms: rooms(base), agentId, createdAt: new Date() }
           await db.collection('hotels').insertOne({ ...hotel })
           imported++
           out.push(hotel)

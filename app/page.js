@@ -1,5 +1,6 @@
 'use client'
 
+import { LOGO_LIGHT, LOGO_DARK } from './brandLogos'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -1272,8 +1273,8 @@ function App() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="container flex h-16 items-center justify-between gap-4">
         <button onClick={() => { goto('home'); loadHotels() }} className="flex items-center shrink-0">
-          <img src="/logo2.png" alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain block dark:hidden" />
-          <img src="/logo1.png" alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain hidden dark:block" />
+          <img src={LOGO_LIGHT} alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain block dark:hidden" />
+          <img src={LOGO_DARK} alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain hidden dark:block" />
         </button>
 
         <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
@@ -2011,8 +2012,8 @@ function App() {
     <footer className="border-t bg-muted/30 mt-10">
       <div className="container py-12 grid gap-8 md:grid-cols-4">
         <div>
-          <img src="/logo2.png" alt="YABISO HOTELS" className="h-16 w-auto object-contain block dark:hidden" />
-          <img src="/logo1.png" alt="YABISO HOTELS" className="h-16 w-auto object-contain hidden dark:block" />
+          <img src={LOGO_LIGHT} alt="YABISO HOTELS" className="h-16 w-auto object-contain block dark:hidden" />
+          <img src={LOGO_DARK} alt="YABISO HOTELS" className="h-16 w-auto object-contain hidden dark:block" />
           <p className="text-sm text-muted-foreground mt-2">Réservez • Séjournez • Découvrez l'Afrique</p>
           <p className="text-xs text-muted-foreground mt-3">Powered by BissaGlobal Services</p>
         </div>

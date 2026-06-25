@@ -22,6 +22,7 @@ import {
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
+  Home, BedDouble, Compass, Bus, KeyRound,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -93,6 +94,26 @@ const AMENITIES = {
 
 const CURRENCIES = ['CDF', 'USD', 'EUR', 'GBP', 'XAF']
 const SYMBOLS = { CDF: 'FC', USD: '$', EUR: '€', GBP: '£', XAF: 'FCFA' }
+
+const STAY_CATS = [
+  { key: '', icon: Sparkles, fr: 'Tous', en: 'All' },
+  { key: 'hotel', icon: Building2, fr: 'Hôtels', en: 'Hotels' },
+  { key: 'apartment', icon: Home, fr: 'Appartements', en: 'Apartments' },
+  { key: 'vacation_home', icon: KeyRound, fr: 'Maisons de vacances', en: 'Vacation homes' },
+  { key: 'short_stay', icon: BedDouble, fr: 'Courte durée', en: 'Short stays' },
+]
+const SERVICES_SOON = [
+  { icon: Compass, fr: 'Excursions', en: 'Tours' },
+  { icon: Bus, fr: 'Transferts aéroport', en: 'Airport transfers' },
+  { icon: Car, fr: 'Taxis', en: 'Taxis' },
+  { icon: KeyRound, fr: 'Location de voitures', en: 'Car rental' },
+  { icon: Plane, fr: 'Vols', en: 'Flights' },
+  { icon: ShieldCheck, fr: 'Assurances voyage', en: 'Travel insurance' },
+]
+const CAT_LABELS = {
+  fr: { hotel: 'Hôtel', apartment: 'Appartement', vacation_home: 'Maison de vacances', short_stay: 'Courte durée' },
+  en: { hotel: 'Hotel', apartment: 'Apartment', vacation_home: 'Vacation home', short_stay: 'Short stay' },
+}
 const PAYMENTS = [
   { id: 'visa', label: 'Visa' }, { id: 'mastercard', label: 'Mastercard' }, { id: 'stripe', label: 'Stripe' },
   { id: 'paypal', label: 'PayPal' }, { id: 'orange', label: 'Orange Money' }, { id: 'airtel', label: 'Airtel Money' },
@@ -1169,6 +1190,7 @@ function App() {
     checkOut: fmtDateInput(new Date(today.getTime() + 3 * 86400000)), guests: 2,
   })
   const [sugOpen, setSugOpen] = useState(false)
+  const [category, setCategory] = useState('')
 
   const t = useCallback((k) => T[lang][k], [lang])
   const typeLabel = useCallback((ty) => T[lang].types[ty] || ty, [lang])
@@ -1220,7 +1242,7 @@ function App() {
   const doSearch = async (q) => {
     const query = typeof q === 'string' ? q : search.q
     setSugOpen(false)
-    await loadHotels({ q: query, type: search.type, guests: search.guests })
+    await loadHotels({ q: query, type: search.type, guests: search.guests, category })
     goto('search')
   }
 
@@ -1229,6 +1251,35 @@ function App() {
     setSugOpen(false)
     doSearch(d.city)
   }
+
+  const pickCategory = (key) => { setCategory(key); loadHotels({ category: key }); goto('search') }
+
+  const ServiceTabs = ({ light }) => (
+    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+      {STAY_CATS.map((c) => {
+        const active = category === c.key
+        const Icon = c.icon
+        return (
+          <button key={c.key || 'all'} onClick={() => pickCategory(c.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap text-sm font-medium transition shrink-0 ${active ? 'bg-primary text-primary-foreground border-primary shadow' : light ? 'bg-white/15 text-white border-white/30 hover:bg-white/25 backdrop-blur' : 'bg-card text-foreground border-border hover:bg-accent'}`}>
+            <Icon className="h-4 w-4" />{lang === 'fr' ? c.fr : c.en}
+          </button>
+        )
+      })}
+      <div className={`w-px shrink-0 mx-1 ${light ? 'bg-white/30' : 'bg-border'}`} />
+      {SERVICES_SOON.map((s) => {
+        const Icon = s.icon
+        return (
+          <button key={s.fr} onClick={() => toast.info((lang === 'fr' ? s.fr : s.en) + (lang === 'fr' ? ' — Bientôt disponible sur YABISO' : ' — Coming soon on YABISO'))}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap text-sm font-medium transition shrink-0 ${light ? 'bg-white/10 text-white/80 border-white/20 hover:bg-white/20 backdrop-blur' : 'bg-muted/40 text-muted-foreground border-border hover:bg-accent'}`}>
+            <Icon className="h-4 w-4" />{lang === 'fr' ? s.fr : s.en}
+            <span className="text-[9px] uppercase font-bold bg-amber-400 text-black rounded px-1 py-0.5 leading-none">{lang === 'fr' ? 'Bientôt' : 'Soon'}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
 
   const toggleFav = (id) => {
     if (user && token) {
@@ -1387,7 +1438,7 @@ function App() {
       <div className="relative h-52 overflow-hidden">
         <img src={h.images[0]} alt={h.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute top-3 left-3 flex gap-2">
-          <Badge className="bg-background/90 text-foreground hover:bg-background/90 border">{typeLabel(h.type)}</Badge>
+          {h.category && CAT_LABELS[lang][h.category] && <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] border-0 font-semibold">{CAT_LABELS[lang][h.category]}</Badge>}
           {h.verified && <Badge className="bg-[#0057B8] text-white gap-1 hover:bg-[#0057B8]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
         </div>
         <button onClick={(e) => { e.stopPropagation(); toggleFav(h.id) }} className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/90 grid place-items-center hover:scale-110 transition">
@@ -1449,7 +1500,8 @@ function App() {
           <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] mb-4 font-semibold">Réservez • Séjournez • Découvrez l'Afrique</Badge>
           <h1 className="text-4xl md:text-6xl font-extrabold text-white max-w-3xl leading-tight drop-shadow">{t('hero_title')}</h1>
           <p className="mt-4 text-lg text-white/90 max-w-2xl">{t('hero_sub')}</p>
-          <div className="mt-8 max-w-5xl">{SearchBar({})}</div>
+          <div className="mt-6 max-w-5xl">{ServiceTabs({ light: true })}</div>
+          <div className="mt-4 max-w-5xl">{SearchBar({})}</div>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/90">
             <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[#F4B400]" />Hôtels vérifiés</span>
             <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-[#F4B400]" />Paiement sécurisé multi-devises</span>
@@ -1572,10 +1624,11 @@ function App() {
   const SearchView = () => (
     <main className="container py-8">
       <div className="mb-6">{SearchBar({ compact: true })}</div>
+      <div className="mb-5">{ServiceTabs({})}</div>
       <div className="flex flex-wrap items-center gap-3 mb-5">
         <h2 className="text-xl font-bold">{hotels.length} {t('results')}{search.q ? ` · ${search.q}` : ''}</h2>
         <div className="ml-auto">
-          <Select value={search.type || 'all'} onValueChange={(v) => { const ty = v === 'all' ? '' : v; setSearch({ ...search, type: ty }); loadHotels({ q: search.q, type: ty, guests: search.guests }) }}>
+          <Select value={search.type || 'all'} onValueChange={(v) => { const ty = v === 'all' ? '' : v; setSearch({ ...search, type: ty }); loadHotels({ q: search.q, type: ty, guests: search.guests, category }) }}>
             <SelectTrigger className="h-9 w-[180px]"><SelectValue placeholder={t('all_types')} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('all_types')}</SelectItem>

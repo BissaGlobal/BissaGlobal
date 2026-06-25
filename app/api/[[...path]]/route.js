@@ -272,6 +272,19 @@ async function migrateFeatureCongo(db) {
   } catch (e) { console.error('[migrate] featureCongo failed', e?.message || e) }
 }
 
+async function assignCategoriesV1(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.assignCategoriesV1) return
+    const hotels = await db.collection('hotels').find({ category: { $exists: false } }).toArray()
+    for (const h of hotels) {
+      await db.collection('hotels').updateOne({ id: h.id }, { $set: { category: categoryFromType(h.type) } })
+    }
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', assignCategoriesV1: true } }, { upsert: true })
+    if (hotels.length) console.log('[migrate] assignCategoriesV1 set category on', hotels.length, 'hotels')
+  } catch (e) { console.error('[migrate] assignCategoriesV1 failed', e?.message || e) }
+}
+
 async function seedImportedHotels(db) {
   try {
     const flag = await db.collection('settings').findOne({ id: 'migrations' })
@@ -284,6 +297,7 @@ async function seedImportedHotels(db) {
         await db.collection('hotels').insertOne({
           ...h,
           id: h.id || uuidv4(),
+          category: h.category || categoryFromType(h.type),
           featured: /congo/i.test(h.country || '') ? true : !!h.featured,
           createdAt: h.createdAt ? new Date(h.createdAt) : new Date(),
         })
@@ -300,6 +314,7 @@ async function seed(db) {
   if (count > 0) {
     await migrateFeatureCongo(db)
     await seedImportedHotels(db)
+    await assignCategoriesV1(db)
     return { seeded: false, hotels: await db.collection('hotels').countDocuments() }
   }
   const hotels = buildHotels()
@@ -383,6 +398,15 @@ function mapGoogleType(types = [], primary = '') {
   if (all.includes('guest')) return 'guesthouse'
   if (all.includes('lodge') || all.includes('campground')) return 'lodge'
   if (all.includes('bed_and_breakfast') || all.includes('bnb')) return 'guesthouse'
+  return 'hotel'
+}
+
+// Map an accommodation type to one of the unified categories
+function categoryFromType(type = '') {
+  const t = (type || '').toLowerCase()
+  if (t.includes('apart') || t.includes('residence') || t.includes('studio')) return 'apartment'
+  if (t.includes('villa') || t.includes('lodge') || t.includes('cottage') || t.includes('chalet') || t.includes('maison')) return 'vacation_home'
+  if (t.includes('guest') || t.includes('bnb') || t.includes('bed_and_breakfast') || t.includes('hostel') || t.includes('chambre')) return 'short_stay'
   return 'hotel'
 }
 
@@ -690,6 +714,8 @@ async function handleRoute(request, { params }) {
       if (city) hotels = hotels.filter((h) => (h.city || '').toLowerCase().includes(city.toLowerCase()))
       if (country) hotels = hotels.filter((h) => h.country === country)
       if (featured === 'true') hotels = hotels.filter((h) => h.featured)
+      const category = sp.get('category') || ''
+      if (category) hotels = hotels.filter((h) => (h.category || categoryFromType(h.type)) === category)
       if (guests) hotels = hotels.filter((h) => h.rooms.some((r) => r.capacity >= guests))
       return handleCORS(NextResponse.json(clean(hotels)))
     }
@@ -837,8 +863,9 @@ async function handleRoute(request, { params }) {
         let images = googlePhotoUrls(p.photos)
         if (images.length === 0) images = ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
         const addr = p.formattedAddress || city
+        const gType = mapGoogleType(p.types, p.primaryType)
         const docBase = {
-          name, type: mapGoogleType(p.types, p.primaryType), city, province, country, region,
+          name, type: gType, category: categoryFromType(gType), city, province, country, region,
           address: addr, lat: (p.location && p.location.latitude) || 0, lng: (p.location && p.location.longitude) || 0,
           images, rating, reviewCount: p.userRatingCount || 0,
           source: 'google_places', externalId,

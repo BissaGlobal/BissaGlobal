@@ -822,6 +822,7 @@ function AdminDashboard({ lang, token, onBack }) {
   const [bookings, setBookings] = useState([])
   const [users, setUsers] = useState([])
   const [agents, setAgents] = useState([])
+  const [serviceReqs, setServiceReqs] = useState([])
   const [settings, setSettings] = useState({ rates: { USD: 2850, EUR: 3080, GBP: 3600, XAF: 4.7 }, fee: 0.07, commission: 0.3 })
   const H = { headers: { Authorization: 'Bearer ' + token } }
   const aFetch = (u, opts = {}) => fetch(u, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + token } })
@@ -832,6 +833,7 @@ function AdminDashboard({ lang, token, onBack }) {
     aFetch('/api/admin/bookings').then((r) => r.json()).then((d) => setBookings(Array.isArray(d) ? d : [])).catch(() => {})
     aFetch('/api/admin/users').then((r) => r.json()).then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {})
     aFetch('/api/admin/agents').then((r) => r.json()).then((d) => setAgents(Array.isArray(d) ? d : [])).catch(() => {})
+    aFetch('/api/service-requests').then((r) => r.json()).then((d) => setServiceReqs(Array.isArray(d) ? d : [])).catch(() => {})
     fetch('/api/settings/rates').then((r) => r.json()).then((s) => { if (s.rates) setSettings(s) }).catch(() => {})
   }, [token])
   useEffect(() => { refresh() }, [refresh])
@@ -843,6 +845,9 @@ function AdminDashboard({ lang, token, onBack }) {
   const setRole = (u, role) => aFetch('/api/admin/users/' + u.id + '/role', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) }).then(() => refresh())
   const delUser = (u) => { if (!confirm('Supprimer ' + u.email + ' ?')) return; aFetch('/api/admin/users/' + u.id, { method: 'DELETE' }).then(() => refresh()) }
   const saveSettings = () => fetch('/api/settings/rates', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ rates: settings.rates, fee: parseFloat(settings.fee), commission: parseFloat(settings.commission) }) }).then((r) => r.json()).then((s) => { if (s.rates) setSettings(s); toast.success(lang === 'fr' ? 'Paramètres enregistrés' : 'Settings saved') })
+  const setSvcReqStatus = (req, status) => aFetch('/api/service-requests/' + req.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }).then(() => { toast.success(lang === 'fr' ? 'Statut mis à jour' : 'Status updated'); refresh() })
+  const svcTypeLbl = (t) => ({ excursion: lang === 'fr' ? 'Excursion' : 'Tour', transfer: lang === 'fr' ? 'Transfert' : 'Transfer', taxi: 'Taxi', car_rental: lang === 'fr' ? 'Location voiture' : 'Car rental' }[t] || t)
+  const svcStatusBadge = (s) => ({ pending: 'bg-amber-100 text-amber-800', confirmed: 'bg-green-100 text-green-800', cancelled: 'bg-red-100 text-red-700', completed: 'bg-blue-100 text-blue-800' }[s] || 'bg-muted text-foreground')
 
   if (!token) return <main className="container py-20 text-center text-muted-foreground">Admin only.</main>
 
@@ -860,6 +865,7 @@ function AdminDashboard({ lang, token, onBack }) {
           <TabsTrigger value="payments" className="gap-1"><Wallet className="h-4 w-4" />{lang === 'fr' ? 'Paiements' : 'Payments'}</TabsTrigger>
           <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" />{lang === 'fr' ? 'Utilisateurs' : 'Users'}</TabsTrigger>
           <TabsTrigger value="agents" className="gap-1"><UserCog className="h-4 w-4" />Agents</TabsTrigger>
+          <TabsTrigger value="servicereqs" className="gap-1"><Compass className="h-4 w-4" />{lang === 'fr' ? 'Demandes services' : 'Service requests'}{serviceReqs.filter((r) => r.status === 'pending').length > 0 && <span className="ml-1 text-[10px] font-bold bg-amber-400 text-black rounded-full px-1.5">{serviceReqs.filter((r) => r.status === 'pending').length}</span>}</TabsTrigger>
           <TabsTrigger value="settings" className="gap-1"><SettingsIcon className="h-4 w-4" />{lang === 'fr' ? 'Paramètres' : 'Settings'}</TabsTrigger>
         </TabsList>
 
@@ -972,6 +978,41 @@ function AdminDashboard({ lang, token, onBack }) {
             {agents.length === 0 && <div className="py-10 text-center text-muted-foreground col-span-full">Aucun agent.</div>}
           </div>
         </TabsContent>
+
+        <TabsContent value="servicereqs">
+          <div className="space-y-3">
+            {serviceReqs.length === 0 && <div className="py-10 text-center text-muted-foreground">{lang === 'fr' ? 'Aucune demande de service pour le moment.' : 'No service requests yet.'}</div>}
+            {serviceReqs.map((r) => (
+              <Card key={r.id} className="p-4 border">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold">{r.serviceName}</span>
+                      <Badge variant="secondary" className="text-[10px]">{svcTypeLbl(r.serviceType)}</Badge>
+                      <Badge className={`text-[10px] border-0 ${svcStatusBadge(r.status)}`}>{r.status}</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">{r.reference} · {r.city}, {r.country}</div>
+                    <div className="text-sm mt-2 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+                      <span><span className="text-muted-foreground">{lang === 'fr' ? 'Client : ' : 'Customer: '}</span>{r.customer?.name}</span>
+                      <span><span className="text-muted-foreground">Email : </span>{r.customer?.email}</span>
+                      <span><span className="text-muted-foreground">Tél : </span>{r.customer?.phone || '-'}</span>
+                      <span><span className="text-muted-foreground">Date : </span>{r.date || '-'}</span>
+                      <span><span className="text-muted-foreground">{lang === 'fr' ? 'Quantité : ' : 'Qty: '}</span>{r.quantity}</span>
+                      <span className="font-semibold text-primary">{SYMBOLS[r.currency]}{(r.totalDisplay || 0).toLocaleString('fr-FR')}{r.currency === 'CDF' ? ' FC' : ''}</span>
+                    </div>
+                    {r.notes && <div className="text-xs text-muted-foreground mt-1 italic">"{r.notes}"</div>}
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    {r.status !== 'confirmed' && <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700" onClick={() => setSvcReqStatus(r, 'confirmed')}><CheckCircle2 className="h-3.5 w-3.5" />{lang === 'fr' ? 'Confirmer' : 'Confirm'}</Button>}
+                    {r.status !== 'completed' && r.status === 'confirmed' && <Button size="sm" variant="outline" className="gap-1" onClick={() => setSvcReqStatus(r, 'completed')}><BadgeCheck className="h-3.5 w-3.5" />{lang === 'fr' ? 'Terminé' : 'Complete'}</Button>}
+                    {r.status !== 'cancelled' && <Button size="sm" variant="outline" className="gap-1 text-red-600 hover:text-red-700" onClick={() => setSvcReqStatus(r, 'cancelled')}><X className="h-3.5 w-3.5" />{lang === 'fr' ? 'Annuler' : 'Cancel'}</Button>}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
 
         <TabsContent value="settings">
           <Card className="p-5 border max-w-lg">

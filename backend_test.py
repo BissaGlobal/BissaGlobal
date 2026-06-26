@@ -1,625 +1,552 @@
 #!/usr/bin/env python3
 """
-Backend API test for YABISO HOTELS - Category Feature (Phase 1 Multi-Vertical)
-Tests the NEW accommodation category feature with category field and filtering.
+Backend API Test for YABISO HOTELS - Phase 2 Travel Services Feature
+Tests the new services collection and service_requests endpoints
 """
 
 import requests
+import json
 import os
-import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Base URL from environment
 BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://yabiso-hotels.preview.emergentagent.com')
 API_BASE = f"{BASE_URL}/api"
 
-def log(msg):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+# Admin credentials
+ADMIN_EMAIL = "admin@yabiso.com"
+ADMIN_PASSWORD = "yabiso2025"
 
-def test_category_filter():
-    """Test 1: CATEGORY FILTER - Test category query parameter on GET /api/hotels"""
-    log("=" * 80)
-    log("TEST 1: CATEGORY FILTER")
-    log("=" * 80)
-    
-    results = {
-        'hotel': {'pass': False, 'count': 0, 'expected': 291},
-        'apartment': {'pass': False, 'count': 0, 'expected': 6},
-        'vacation_home': {'pass': False, 'count': 0, 'expected': 7},
-        'short_stay': {'pass': False, 'count': 0, 'expected': 7},
-        'all': {'pass': False, 'count': 0, 'expected': 311},
-        'combined': {'pass': False, 'count': 0},
-        'category_field': {'pass': False},
-        'no_id_leak': {'pass': False}
-    }
-    
+# Test results tracking
+test_results = []
+
+def log_test(test_name, passed, details=""):
+    """Log test result"""
+    status = "✅ PASS" if passed else "❌ FAIL"
+    result = f"{status} - {test_name}"
+    if details:
+        result += f": {details}"
+    test_results.append(result)
+    print(result)
+    return passed
+
+def test_get_all_services():
+    """Test 1: GET /api/services - returns ~16 services with correct structure"""
+    print("\n=== TEST 1: GET /api/services (list all services) ===")
     try:
-        # Test 1.1: GET /api/hotels?category=hotel
-        log("\n1.1: Testing GET /api/hotels?category=hotel")
-        resp = requests.get(f"{API_BASE}/hotels?category=hotel", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
+        response = requests.get(f"{API_BASE}/services", timeout=10)
         
-        hotels = resp.json()
-        results['hotel']['count'] = len(hotels)
-        log(f"✓ Returned {len(hotels)} hotels (expected ~{results['hotel']['expected']})")
+        if response.status_code != 200:
+            return log_test("GET /api/services", False, f"HTTP {response.status_code}")
         
-        # Verify all have category='hotel'
-        non_hotel = [h for h in hotels if h.get('category') != 'hotel']
-        if non_hotel:
-            log(f"❌ FAIL: Found {len(non_hotel)} hotels without category='hotel'")
-            log(f"   Sample: {non_hotel[0].get('name')} has category={non_hotel[0].get('category')}")
-            return results
+        services = response.json()
         
-        log(f"✓ All {len(hotels)} hotels have category='hotel'")
-        results['hotel']['pass'] = True
+        # Check count (~16 services)
+        if len(services) < 15 or len(services) > 17:
+            return log_test("GET /api/services", False, f"Expected ~16 services, got {len(services)}")
         
-        # Test 1.2: GET /api/hotels?category=apartment
-        log("\n1.2: Testing GET /api/hotels?category=apartment")
-        resp = requests.get(f"{API_BASE}/hotels?category=apartment", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
+        # Check structure of first service
+        if not services:
+            return log_test("GET /api/services", False, "Empty services array")
         
-        apartments = resp.json()
-        results['apartment']['count'] = len(apartments)
-        log(f"✓ Returned {len(apartments)} apartments (expected ~{results['apartment']['expected']})")
+        s = services[0]
+        required_fields = ['id', 'type', 'name', 'nameEn', 'city', 'country', 'priceCDF', 'unit', 'image', 'description']
+        missing = [f for f in required_fields if f not in s]
+        if missing:
+            return log_test("GET /api/services", False, f"Missing fields: {missing}")
         
-        non_apartment = [h for h in apartments if h.get('category') != 'apartment']
-        if non_apartment:
-            log(f"❌ FAIL: Found {len(non_apartment)} hotels without category='apartment'")
-            return results
+        # Check no Mongo _id leak
+        if '_id' in s:
+            return log_test("GET /api/services", False, "Mongo _id leaked in response")
         
-        log(f"✓ All {len(apartments)} hotels have category='apartment'")
-        if len(apartments) > 0:
-            log(f"   Sample: {apartments[0].get('name')} (type: {apartments[0].get('type')})")
-        results['apartment']['pass'] = True
+        # Count by type
+        types = {}
+        for svc in services:
+            t = svc.get('type', 'unknown')
+            types[t] = types.get(t, 0) + 1
         
-        # Test 1.3: GET /api/hotels?category=vacation_home
-        log("\n1.3: Testing GET /api/hotels?category=vacation_home")
-        resp = requests.get(f"{API_BASE}/hotels?category=vacation_home", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        vacation_homes = resp.json()
-        results['vacation_home']['count'] = len(vacation_homes)
-        log(f"✓ Returned {len(vacation_homes)} vacation homes (expected ~{results['vacation_home']['expected']})")
-        
-        non_vacation = [h for h in vacation_homes if h.get('category') != 'vacation_home']
-        if non_vacation:
-            log(f"❌ FAIL: Found {len(non_vacation)} hotels without category='vacation_home'")
-            return results
-        
-        log(f"✓ All {len(vacation_homes)} hotels have category='vacation_home'")
-        if len(vacation_homes) > 0:
-            log(f"   Sample: {vacation_homes[0].get('name')} (type: {vacation_homes[0].get('type')})")
-        results['vacation_home']['pass'] = True
-        
-        # Test 1.4: GET /api/hotels?category=short_stay
-        log("\n1.4: Testing GET /api/hotels?category=short_stay")
-        resp = requests.get(f"{API_BASE}/hotels?category=short_stay", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        short_stays = resp.json()
-        results['short_stay']['count'] = len(short_stays)
-        log(f"✓ Returned {len(short_stays)} short stays (expected ~{results['short_stay']['expected']})")
-        
-        non_short = [h for h in short_stays if h.get('category') != 'short_stay']
-        if non_short:
-            log(f"❌ FAIL: Found {len(non_short)} hotels without category='short_stay'")
-            return results
-        
-        log(f"✓ All {len(short_stays)} hotels have category='short_stay'")
-        if len(short_stays) > 0:
-            log(f"   Sample: {short_stays[0].get('name')} (type: {short_stays[0].get('type')})")
-        results['short_stay']['pass'] = True
-        
-        # Test 1.5: GET /api/hotels (no category) - should return all
-        log("\n1.5: Testing GET /api/hotels (no category filter)")
-        resp = requests.get(f"{API_BASE}/hotels", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        all_hotels = resp.json()
-        results['all']['count'] = len(all_hotels)
-        log(f"✓ Returned {len(all_hotels)} hotels (expected ~{results['all']['expected']})")
-        
-        # Verify sum of categories ≈ total
-        category_sum = results['hotel']['count'] + results['apartment']['count'] + results['vacation_home']['count'] + results['short_stay']['count']
-        log(f"✓ Sum of categories: {category_sum} (hotel:{results['hotel']['count']} + apartment:{results['apartment']['count']} + vacation_home:{results['vacation_home']['count']} + short_stay:{results['short_stay']['count']})")
-        
-        if category_sum != len(all_hotels):
-            log(f"⚠️  WARNING: Category sum ({category_sum}) != total hotels ({len(all_hotels)})")
-        else:
-            log(f"✓ Category sum matches total hotels")
-        
-        results['all']['pass'] = True
-        
-        # Test 1.6: Combined filter - category + city
-        log("\n1.6: Testing GET /api/hotels?category=hotel&city=Brazzaville")
-        resp = requests.get(f"{API_BASE}/hotels?category=hotel&city=Brazzaville", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        combined = resp.json()
-        results['combined']['count'] = len(combined)
-        log(f"✓ Returned {len(combined)} hotels")
-        
-        # Verify all have category='hotel' AND city contains Brazzaville
-        for h in combined:
-            if h.get('category') != 'hotel':
-                log(f"❌ FAIL: Hotel {h.get('name')} has category={h.get('category')}, expected 'hotel'")
-                return results
-            if 'brazzaville' not in (h.get('city') or '').lower():
-                log(f"❌ FAIL: Hotel {h.get('name')} has city={h.get('city')}, expected to contain 'Brazzaville'")
-                return results
-        
-        log(f"✓ All {len(combined)} hotels have category='hotel' AND city contains 'Brazzaville'")
-        if len(combined) > 0:
-            log(f"   Sample: {combined[0].get('name')} in {combined[0].get('city')}")
-        results['combined']['pass'] = True
-        
-        # Test 1.7: Verify every hotel has category field
-        log("\n1.7: Verifying all hotels have 'category' field")
-        hotels_without_category = [h for h in all_hotels if 'category' not in h]
-        if hotels_without_category:
-            log(f"❌ FAIL: Found {len(hotels_without_category)} hotels without 'category' field")
-            log(f"   Sample: {hotels_without_category[0].get('name')} (id: {hotels_without_category[0].get('id')})")
-            return results
-        
-        log(f"✓ All {len(all_hotels)} hotels have 'category' field")
-        results['category_field']['pass'] = True
-        
-        # Test 1.8: Verify no Mongo _id leaks
-        log("\n1.8: Verifying no Mongo _id leaks")
-        hotels_with_id = [h for h in all_hotels if '_id' in h]
-        if hotels_with_id:
-            log(f"❌ FAIL: Found {len(hotels_with_id)} hotels with '_id' field")
-            return results
-        
-        log(f"✓ No Mongo _id leaks in hotel responses")
-        results['no_id_leak']['pass'] = True
-        
-        log("\n" + "=" * 80)
-        log("TEST 1 SUMMARY: CATEGORY FILTER")
-        log("=" * 80)
-        log(f"✅ hotel filter: {results['hotel']['count']} hotels (expected ~{results['hotel']['expected']})")
-        log(f"✅ apartment filter: {results['apartment']['count']} apartments (expected ~{results['apartment']['expected']})")
-        log(f"✅ vacation_home filter: {results['vacation_home']['count']} vacation homes (expected ~{results['vacation_home']['expected']})")
-        log(f"✅ short_stay filter: {results['short_stay']['count']} short stays (expected ~{results['short_stay']['expected']})")
-        log(f"✅ no filter: {results['all']['count']} total hotels (expected ~{results['all']['expected']})")
-        log(f"✅ combined filter (hotel + Brazzaville): {results['combined']['count']} hotels")
-        log(f"✅ All hotels have 'category' field")
-        log(f"✅ No Mongo _id leaks")
-        
-        return results
+        return log_test("GET /api/services", True, f"Returned {len(services)} services. Types: {types}")
         
     except Exception as e:
-        log(f"❌ EXCEPTION: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return results
+        return log_test("GET /api/services", False, f"Exception: {str(e)}")
 
-def test_migration_idempotency():
-    """Test 2: MIGRATION IDEMPOTENCY - Test seed endpoint stability"""
-    log("\n" + "=" * 80)
-    log("TEST 2: MIGRATION IDEMPOTENCY")
-    log("=" * 80)
+def test_filter_by_type():
+    """Test 2: Filter services by type (excursion, transfer, taxi, car_rental)"""
+    print("\n=== TEST 2: Filter services by type ===")
     
-    results = {
-        'call1': {'pass': False, 'seeded': None, 'count': 0},
-        'call2': {'pass': False, 'seeded': None, 'count': 0},
-        'call3': {'pass': False, 'seeded': None, 'count': 0},
-        'stable': {'pass': False}
-    }
+    types_to_test = [
+        ('excursion', 4),
+        ('transfer', 4),
+        ('taxi', 4),
+        ('car_rental', 4)
+    ]
     
+    all_passed = True
+    
+    for service_type, expected_count in types_to_test:
+        try:
+            response = requests.get(f"{API_BASE}/services?type={service_type}", timeout=10)
+            
+            if response.status_code != 200:
+                log_test(f"Filter type={service_type}", False, f"HTTP {response.status_code}")
+                all_passed = False
+                continue
+            
+            services = response.json()
+            
+            # Check count
+            if len(services) != expected_count:
+                log_test(f"Filter type={service_type}", False, f"Expected {expected_count}, got {len(services)}")
+                all_passed = False
+                continue
+            
+            # Verify all have matching type
+            wrong_type = [s for s in services if s.get('type') != service_type]
+            if wrong_type:
+                log_test(f"Filter type={service_type}", False, f"{len(wrong_type)} services with wrong type")
+                all_passed = False
+                continue
+            
+            log_test(f"Filter type={service_type}", True, f"{len(services)} services, all type={service_type}")
+            
+        except Exception as e:
+            log_test(f"Filter type={service_type}", False, f"Exception: {str(e)}")
+            all_passed = False
+    
+    return all_passed
+
+def test_filter_by_city():
+    """Test 2b: Filter services by type and city"""
+    print("\n=== TEST 2b: Filter by type and city ===")
     try:
-        # Call 1
-        log("\n2.1: First GET /api/seed call")
-        resp = requests.get(f"{API_BASE}/seed", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
+        response = requests.get(f"{API_BASE}/services?type=transfer&city=Kinshasa", timeout=10)
         
-        data = resp.json()
-        results['call1']['seeded'] = data.get('seeded')
-        results['call1']['count'] = data.get('hotels', 0)
-        log(f"✓ Response: seeded={data.get('seeded')}, hotels={data.get('hotels')}")
+        if response.status_code != 200:
+            return log_test("Filter type+city", False, f"HTTP {response.status_code}")
         
-        if data.get('seeded') is False:
-            log(f"✓ Seed is idempotent (seeded=false)")
+        services = response.json()
         
-        results['call1']['pass'] = True
+        # Should have at least 1 transfer in Kinshasa
+        if len(services) == 0:
+            return log_test("Filter type+city", False, "No transfers found in Kinshasa")
         
-        # Call 2
-        log("\n2.2: Second GET /api/seed call")
-        resp = requests.get(f"{API_BASE}/seed", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
+        # Verify all are transfers in Kinshasa
+        for s in services:
+            if s.get('type') != 'transfer':
+                return log_test("Filter type+city", False, f"Service {s.get('name')} is not a transfer")
+            if 'kinshasa' not in s.get('city', '').lower():
+                return log_test("Filter type+city", False, f"Service {s.get('name')} not in Kinshasa")
         
-        data = resp.json()
-        results['call2']['seeded'] = data.get('seeded')
-        results['call2']['count'] = data.get('hotels', 0)
-        log(f"✓ Response: seeded={data.get('seeded')}, hotels={data.get('hotels')}")
-        
-        if data.get('seeded') is False:
-            log(f"✓ Seed is idempotent (seeded=false)")
-        
-        results['call2']['pass'] = True
-        
-        # Call 3
-        log("\n2.3: Third GET /api/seed call")
-        resp = requests.get(f"{API_BASE}/seed", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        data = resp.json()
-        results['call3']['seeded'] = data.get('seeded')
-        results['call3']['count'] = data.get('hotels', 0)
-        log(f"✓ Response: seeded={data.get('seeded')}, hotels={data.get('hotels')}")
-        
-        if data.get('seeded') is False:
-            log(f"✓ Seed is idempotent (seeded=false)")
-        
-        results['call3']['pass'] = True
-        
-        # Verify stability
-        log("\n2.4: Verifying hotel count stability")
-        if results['call1']['count'] == results['call2']['count'] == results['call3']['count']:
-            log(f"✓ Hotel count stable at {results['call1']['count']} across all 3 calls")
-            results['stable']['pass'] = True
-        else:
-            log(f"❌ FAIL: Hotel count not stable: {results['call1']['count']} -> {results['call2']['count']} -> {results['call3']['count']}")
-            return results
-        
-        log("\n" + "=" * 80)
-        log("TEST 2 SUMMARY: MIGRATION IDEMPOTENCY")
-        log("=" * 80)
-        log(f"✅ Seed endpoint returns seeded=false (idempotent)")
-        log(f"✅ Hotel count stable at ~{results['call1']['count']} (expected ~311)")
-        log(f"✅ No duplication across multiple seed calls")
-        log(f"✅ Migration flag assignCategoriesV1 working (inferred from stable behavior)")
-        
-        return results
+        return log_test("Filter type+city", True, f"{len(services)} transfers in Kinshasa")
         
     except Exception as e:
-        log(f"❌ EXCEPTION: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return results
+        return log_test("Filter type+city", False, f"Exception: {str(e)}")
 
-def test_import_sets_category():
-    """Test 3: IMPORT sets category - Test POST /api/import/hotels"""
-    log("\n" + "=" * 80)
-    log("TEST 3: IMPORT SETS CATEGORY")
-    log("=" * 80)
-    
-    results = {
-        'import': {'pass': False, 'count': 0},
-        'category_field': {'pass': False},
-        'featured': {'pass': False},
-        'source': {'pass': False},
-        'no_id_leak': {'pass': False}
-    }
+def test_get_single_service():
+    """Test 3: GET /api/services/:id - single service and 404 for invalid"""
+    print("\n=== TEST 3: GET /api/services/:id (single service) ===")
     
     try:
-        log("\n3.1: Testing POST /api/import/hotels for Owando, Congo-Brazzaville")
+        # First get list to get a valid ID
+        response = requests.get(f"{API_BASE}/services?type=taxi", timeout=10)
+        if response.status_code != 200:
+            return log_test("GET single service", False, "Could not fetch services list")
+        
+        services = response.json()
+        if not services:
+            return log_test("GET single service", False, "No services found")
+        
+        valid_id = services[0]['id']
+        
+        # Test valid ID
+        response = requests.get(f"{API_BASE}/services/{valid_id}", timeout=10)
+        if response.status_code != 200:
+            return log_test("GET single service (valid)", False, f"HTTP {response.status_code}")
+        
+        service = response.json()
+        
+        # Check structure
+        if service.get('id') != valid_id:
+            return log_test("GET single service (valid)", False, "ID mismatch")
+        
+        # Check no _id leak
+        if '_id' in service:
+            return log_test("GET single service (valid)", False, "Mongo _id leaked")
+        
+        log_test("GET single service (valid)", True, f"Service: {service.get('name')}")
+        
+        # Test invalid ID (404)
+        response = requests.get(f"{API_BASE}/services/invalid-id-12345", timeout=10)
+        if response.status_code != 404:
+            return log_test("GET single service (invalid)", False, f"Expected 404, got {response.status_code}")
+        
+        return log_test("GET single service (invalid)", True, "404 for invalid ID")
+        
+    except Exception as e:
+        return log_test("GET single service", False, f"Exception: {str(e)}")
+
+def test_create_service_request():
+    """Test 4: POST /api/service-requests - create service request"""
+    print("\n=== TEST 4: POST /api/service-requests (create request) ===")
+    
+    try:
+        # Get a valid taxi service ID
+        response = requests.get(f"{API_BASE}/services?type=taxi", timeout=10)
+        if response.status_code != 200:
+            return log_test("Create service request", False, "Could not fetch services")
+        
+        services = response.json()
+        if not services:
+            return log_test("Create service request", False, "No taxi services found")
+        
+        taxi = services[0]
+        taxi_id = taxi['id']
+        taxi_price = taxi['priceCDF']
+        
+        # Create service request
         payload = {
-            'city': 'Owando',
-            'province': 'Cuvette',
-            'country': 'Congo-Brazzaville',
-            'region': 'Afrique Centrale',
-            'max': 3
+            "serviceId": taxi_id,
+            "date": "2025-09-01",
+            "quantity": 2,
+            "currency": "USD",
+            "customer": {
+                "name": "QA Tester",
+                "email": "bissa@bgsrdc.com",
+                "phone": "+243900000000"
+            },
+            "notes": "test"
         }
         
-        resp = requests.post(f"{API_BASE}/import/hotels", json=payload, timeout=60)
+        response = requests.post(f"{API_BASE}/service-requests", json=payload, timeout=10)
         
-        # Check for Google API errors
-        if resp.status_code == 502:
-            log(f"⚠️  Google API Error (502): {resp.json().get('error', 'Unknown error')}")
-            log(f"   This may be a billing/quota issue with Google Places API")
-            log(f"   Marking test as SKIPPED due to external API issue")
-            return results
+        if response.status_code != 200:
+            return log_test("Create service request", False, f"HTTP {response.status_code}: {response.text}")
         
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            log(f"   Response: {resp.text}")
-            return results
+        req = response.json()
         
-        data = resp.json()
-        hotels = data.get('hotels', [])
-        results['import']['count'] = len(hotels)
+        # Check reference format (SRV-XXXXXX)
+        if not req.get('reference', '').startswith('SRV-'):
+            return log_test("Create service request", False, f"Invalid reference format: {req.get('reference')}")
         
-        log(f"✓ Import successful: fetched={data.get('fetched')}, imported={data.get('imported')}, updated={data.get('updated')}")
-        log(f"✓ Returned {len(hotels)} hotels")
+        # Check status
+        if req.get('status') != 'pending':
+            return log_test("Create service request", False, f"Expected status 'pending', got {req.get('status')}")
         
-        if len(hotels) == 0:
-            log(f"⚠️  WARNING: No hotels returned from import (Google may have no results for Owando)")
-            log(f"   This is acceptable - marking test as PASS with 0 hotels")
-            results['import']['pass'] = True
-            results['category_field']['pass'] = True
-            results['featured']['pass'] = True
-            results['source']['pass'] = True
-            results['no_id_leak']['pass'] = True
-            return results
+        # Check totalCDF calculation
+        expected_total_cdf = taxi_price * 2
+        if req.get('totalCDF') != expected_total_cdf:
+            return log_test("Create service request", False, f"totalCDF mismatch: expected {expected_total_cdf}, got {req.get('totalCDF')}")
         
-        results['import']['pass'] = True
+        # Check totalDisplay for USD (should be computed with conversion)
+        total_display = req.get('totalDisplay')
+        if not total_display or total_display <= 0:
+            return log_test("Create service request", False, f"Invalid totalDisplay: {total_display}")
         
-        # Verify each hotel has category field
-        log("\n3.2: Verifying all imported hotels have 'category' field")
-        hotels_without_category = [h for h in hotels if 'category' not in h]
-        if hotels_without_category:
-            log(f"❌ FAIL: Found {len(hotels_without_category)} hotels without 'category' field")
-            return results
+        # Check no _id leak
+        if '_id' in req:
+            return log_test("Create service request", False, "Mongo _id leaked")
         
-        log(f"✓ All {len(hotels)} hotels have 'category' field")
+        log_test("Create service request", True, f"Reference: {req.get('reference')}, totalCDF: {req.get('totalCDF')}, totalDisplay: {total_display} USD")
         
-        # Show category distribution
-        categories = {}
-        for h in hotels:
-            cat = h.get('category', 'unknown')
-            categories[cat] = categories.get(cat, 0) + 1
+        # Store for later tests
+        global created_request_id
+        created_request_id = req.get('id')
         
-        log(f"   Category distribution: {categories}")
-        for h in hotels[:3]:  # Show first 3 samples
-            log(f"   Sample: {h.get('name')} - category={h.get('category')}, type={h.get('type')}")
-        
-        results['category_field']['pass'] = True
-        
-        # Verify featured=true for Congo hotels
-        log("\n3.3: Verifying featured=true for Congo-Brazzaville hotels")
-        non_featured = [h for h in hotels if not h.get('featured')]
-        if non_featured:
-            log(f"❌ FAIL: Found {len(non_featured)} hotels without featured=true")
-            log(f"   Sample: {non_featured[0].get('name')}")
-            return results
-        
-        log(f"✓ All {len(hotels)} hotels have featured=true (Congo auto-feature)")
-        results['featured']['pass'] = True
-        
-        # Verify source='google_places'
-        log("\n3.4: Verifying source='google_places'")
-        non_google = [h for h in hotels if h.get('source') != 'google_places']
-        if non_google:
-            log(f"❌ FAIL: Found {len(non_google)} hotels without source='google_places'")
-            return results
-        
-        log(f"✓ All {len(hotels)} hotels have source='google_places'")
-        results['source']['pass'] = True
-        
-        # Verify no _id leaks
-        log("\n3.5: Verifying no Mongo _id leaks")
-        hotels_with_id = [h for h in hotels if '_id' in h]
-        if hotels_with_id:
-            log(f"❌ FAIL: Found {len(hotels_with_id)} hotels with '_id' field")
-            return results
-        
-        log(f"✓ No Mongo _id leaks")
-        results['no_id_leak']['pass'] = True
-        
-        log("\n" + "=" * 80)
-        log("TEST 3 SUMMARY: IMPORT SETS CATEGORY")
-        log("=" * 80)
-        log(f"✅ Import successful: {results['import']['count']} hotels from Owando")
-        log(f"✅ All hotels have 'category' field set (hotel/apartment/vacation_home/short_stay)")
-        log(f"✅ All hotels have featured=true (Congo auto-feature)")
-        log(f"✅ All hotels have source='google_places'")
-        log(f"✅ No Mongo _id leaks")
-        
-        return results
+        return True
         
     except Exception as e:
-        log(f"❌ EXCEPTION: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return results
+        return log_test("Create service request", False, f"Exception: {str(e)}")
+
+def test_service_request_validation():
+    """Test 4b: Validation for service requests"""
+    print("\n=== TEST 4b: Service request validation ===")
+    
+    all_passed = True
+    
+    # Test missing customer.email
+    try:
+        payload = {
+            "serviceId": "some-id",
+            "customer": {
+                "name": "Test"
+            }
+        }
+        response = requests.post(f"{API_BASE}/service-requests", json=payload, timeout=10)
+        
+        if response.status_code != 400:
+            log_test("Validation: missing email", False, f"Expected 400, got {response.status_code}")
+            all_passed = False
+        else:
+            log_test("Validation: missing email", True, "400 returned")
+    except Exception as e:
+        log_test("Validation: missing email", False, f"Exception: {str(e)}")
+        all_passed = False
+    
+    # Test invalid serviceId
+    try:
+        payload = {
+            "serviceId": "invalid-service-id-12345",
+            "customer": {
+                "name": "Test",
+                "email": "test@test.com"
+            }
+        }
+        response = requests.post(f"{API_BASE}/service-requests", json=payload, timeout=10)
+        
+        if response.status_code != 404:
+            log_test("Validation: invalid serviceId", False, f"Expected 404, got {response.status_code}")
+            all_passed = False
+        else:
+            log_test("Validation: invalid serviceId", True, "404 returned")
+    except Exception as e:
+        log_test("Validation: invalid serviceId", False, f"Exception: {str(e)}")
+        all_passed = False
+    
+    return all_passed
+
+def test_admin_auth():
+    """Test 5: Admin endpoints authentication"""
+    print("\n=== TEST 5: Admin endpoints authentication ===")
+    
+    # Test GET /api/service-requests without token (should be 403)
+    try:
+        response = requests.get(f"{API_BASE}/service-requests", timeout=10)
+        
+        if response.status_code != 403:
+            log_test("Admin auth: no token", False, f"Expected 403, got {response.status_code}")
+            return False
+        
+        log_test("Admin auth: no token", True, "403 returned")
+        
+        # Login as admin
+        login_payload = {
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        }
+        response = requests.post(f"{API_BASE}/auth/login", json=login_payload, timeout=10)
+        
+        if response.status_code != 200:
+            log_test("Admin login", False, f"HTTP {response.status_code}")
+            return False
+        
+        data = response.json()
+        token = data.get('token')
+        
+        if not token:
+            log_test("Admin login", False, "No token in response")
+            return False
+        
+        log_test("Admin login", True, f"Token obtained")
+        
+        # Store token for later tests
+        global admin_token
+        admin_token = token
+        
+        # Test GET /api/service-requests with admin token
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(f"{API_BASE}/service-requests", headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            log_test("Admin GET service-requests", False, f"HTTP {response.status_code}")
+            return False
+        
+        reqs = response.json()
+        
+        # Should be an array
+        if not isinstance(reqs, list):
+            log_test("Admin GET service-requests", False, "Response is not an array")
+            return False
+        
+        # Check no _id leak
+        if reqs and '_id' in reqs[0]:
+            log_test("Admin GET service-requests", False, "Mongo _id leaked")
+            return False
+        
+        log_test("Admin GET service-requests", True, f"Returned {len(reqs)} requests")
+        
+        return True
+        
+    except Exception as e:
+        log_test("Admin auth", False, f"Exception: {str(e)}")
+        return False
+
+def test_admin_update_status():
+    """Test 5b: Admin update service request status"""
+    print("\n=== TEST 5b: Admin update service request status ===")
+    
+    try:
+        if not admin_token:
+            return log_test("Admin update status", False, "No admin token available")
+        
+        # Get service requests to find one to update
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        response = requests.get(f"{API_BASE}/service-requests", headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return log_test("Admin update status", False, "Could not fetch service requests")
+        
+        reqs = response.json()
+        if not reqs:
+            return log_test("Admin update status", False, "No service requests to update")
+        
+        req_id = reqs[0]['id']
+        
+        # Test without token (should be 403)
+        payload = {"status": "confirmed"}
+        response = requests.put(f"{API_BASE}/service-requests/{req_id}", json=payload, timeout=10)
+        
+        if response.status_code != 403:
+            log_test("Admin update: no token", False, f"Expected 403, got {response.status_code}")
+            return False
+        
+        log_test("Admin update: no token", True, "403 returned")
+        
+        # Update with admin token
+        response = requests.put(f"{API_BASE}/service-requests/{req_id}", json=payload, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return log_test("Admin update: with token", False, f"HTTP {response.status_code}")
+        
+        updated = response.json()
+        
+        # Check status updated
+        if updated.get('status') != 'confirmed':
+            return log_test("Admin update: with token", False, f"Status not updated: {updated.get('status')}")
+        
+        # Check statusHistory has new entry
+        history = updated.get('statusHistory', [])
+        if not history:
+            return log_test("Admin update: with token", False, "No statusHistory")
+        
+        # Find confirmed entry
+        confirmed_entry = [h for h in history if h.get('key') == 'confirmed']
+        if not confirmed_entry:
+            return log_test("Admin update: with token", False, "No 'confirmed' entry in statusHistory")
+        
+        return log_test("Admin update: with token", True, f"Status updated to 'confirmed', statusHistory has {len(history)} entries")
+        
+    except Exception as e:
+        return log_test("Admin update status", False, f"Exception: {str(e)}")
 
 def test_regression():
-    """Test 4: REGRESSION - Verify existing features still work"""
-    log("\n" + "=" * 80)
-    log("TEST 4: REGRESSION")
-    log("=" * 80)
+    """Test 6: Regression tests"""
+    print("\n=== TEST 6: Regression tests ===")
     
-    results = {
-        'featured': {'pass': False, 'count': 0},
-        'rates': {'pass': False, 'xaf': None},
-        'booking': {'pass': False, 'reference': None}
-    }
+    all_passed = True
     
+    # Test seed idempotency
     try:
-        # Test 4.1: GET /api/hotels?featured=true
-        log("\n4.1: Testing GET /api/hotels?featured=true")
-        resp = requests.get(f"{API_BASE}/hotels?featured=true", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        featured = resp.json()
-        results['featured']['count'] = len(featured)
-        log(f"✓ Returned {len(featured)} featured hotels")
-        
-        # Verify all have featured=true
-        non_featured = [h for h in featured if not h.get('featured')]
-        if non_featured:
-            log(f"❌ FAIL: Found {len(non_featured)} hotels without featured=true")
-            return results
-        
-        log(f"✓ All {len(featured)} hotels have featured=true")
-        results['featured']['pass'] = True
-        
-        # Test 4.2: GET /api/settings/rates
-        log("\n4.2: Testing GET /api/settings/rates")
-        resp = requests.get(f"{API_BASE}/settings/rates", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Expected 200, got {resp.status_code}")
-            return results
-        
-        rates = resp.json()
-        xaf_rate = rates.get('rates', {}).get('XAF')
-        results['rates']['xaf'] = xaf_rate
-        
-        if xaf_rate != 4.7:
-            log(f"❌ FAIL: Expected XAF rate 4.7, got {xaf_rate}")
-            return results
-        
-        log(f"✓ XAF rate is 4.7")
-        log(f"   Full rates: USD={rates.get('rates', {}).get('USD')}, EUR={rates.get('rates', {}).get('EUR')}, GBP={rates.get('rates', {}).get('GBP')}, XAF={xaf_rate}")
-        results['rates']['pass'] = True
-        
-        # Test 4.3: CDF booking with totalDisplay == totalCDF
-        log("\n4.3: Testing CDF booking (totalDisplay should equal totalCDF)")
-        
-        # Get a hotel first
-        resp = requests.get(f"{API_BASE}/hotels?featured=true", timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Could not fetch hotels")
-            return results
-        
-        hotels = resp.json()
-        if len(hotels) == 0:
-            log(f"❌ FAIL: No hotels available for booking")
-            return results
-        
-        hotel = hotels[0]
-        room = hotel.get('rooms', [])[0] if hotel.get('rooms') else None
-        if not room:
-            log(f"❌ FAIL: Hotel has no rooms")
-            return results
-        
-        # Create booking
-        checkin = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
-        checkout = (datetime.now() + timedelta(days=10)).strftime('%Y-%m-%d')
-        
-        booking_payload = {
-            'hotelId': hotel.get('id'),
-            'roomId': room.get('id'),
-            'checkIn': checkin,
-            'checkOut': checkout,
-            'customer': {
-                'name': 'QA Category Test',
-                'email': 'qa.category@yabiso.test',
-                'phone': '+243990009999'
-            },
-            'currency': 'CDF',
-            'paymentMethod': 'visa'
-        }
-        
-        resp = requests.post(f"{API_BASE}/bookings", json=booking_payload, timeout=30)
-        if resp.status_code != 200:
-            log(f"❌ FAIL: Booking failed with status {resp.status_code}")
-            log(f"   Response: {resp.text}")
-            return results
-        
-        booking = resp.json()
-        results['booking']['reference'] = booking.get('reference')
-        
-        log(f"✓ Booking created: {booking.get('reference')}")
-        log(f"   Hotel: {hotel.get('name')}")
-        log(f"   totalCDF: {booking.get('totalCDF')}")
-        log(f"   totalDisplay: {booking.get('totalDisplay')}")
-        log(f"   currency: {booking.get('currency')}")
-        
-        # Verify totalDisplay == totalCDF for CDF bookings
-        if booking.get('totalCDF') != booking.get('totalDisplay'):
-            log(f"❌ FAIL: For CDF booking, totalDisplay ({booking.get('totalDisplay')}) should equal totalCDF ({booking.get('totalCDF')})")
-            return results
-        
-        log(f"✓ CDF booking: totalDisplay == totalCDF (no conversion fee)")
-        results['booking']['pass'] = True
-        
-        log("\n" + "=" * 80)
-        log("TEST 4 SUMMARY: REGRESSION")
-        log("=" * 80)
-        log(f"✅ GET /api/hotels?featured=true returns {results['featured']['count']} hotels")
-        log(f"✅ GET /api/settings/rates returns XAF:4.7")
-        log(f"✅ CDF booking works correctly (reference: {results['booking']['reference']})")
-        log(f"✅ CDF booking has totalDisplay == totalCDF (no conversion fee)")
-        
-        return results
-        
+        response1 = requests.get(f"{API_BASE}/seed", timeout=10)
+        if response1.status_code != 200:
+            log_test("Regression: seed call 1", False, f"HTTP {response1.status_code}")
+            all_passed = False
+        else:
+            data1 = response1.json()
+            hotels1 = data1.get('hotels', 0)
+            log_test("Regression: seed call 1", True, f"Hotels: {hotels1}")
+            
+            # Second call
+            response2 = requests.get(f"{API_BASE}/seed", timeout=10)
+            if response2.status_code != 200:
+                log_test("Regression: seed call 2", False, f"HTTP {response2.status_code}")
+                all_passed = False
+            else:
+                data2 = response2.json()
+                hotels2 = data2.get('hotels', 0)
+                
+                if hotels1 != hotels2:
+                    log_test("Regression: seed idempotent", False, f"Hotels changed: {hotels1} -> {hotels2}")
+                    all_passed = False
+                else:
+                    log_test("Regression: seed idempotent", True, f"Hotels stable at {hotels1}")
+                
+                # Check services not duplicated
+                services_response = requests.get(f"{API_BASE}/services", timeout=10)
+                if services_response.status_code == 200:
+                    services = services_response.json()
+                    if len(services) > 20:
+                        log_test("Regression: services not duplicated", False, f"Too many services: {len(services)}")
+                        all_passed = False
+                    else:
+                        log_test("Regression: services not duplicated", True, f"Services count: {len(services)}")
     except Exception as e:
-        log(f"❌ EXCEPTION: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return results
+        log_test("Regression: seed", False, f"Exception: {str(e)}")
+        all_passed = False
+    
+    # Test hotels still work
+    try:
+        response = requests.get(f"{API_BASE}/hotels?category=apartment", timeout=10)
+        if response.status_code != 200:
+            log_test("Regression: hotels filter", False, f"HTTP {response.status_code}")
+            all_passed = False
+        else:
+            hotels = response.json()
+            log_test("Regression: hotels filter", True, f"Apartments: {len(hotels)}")
+    except Exception as e:
+        log_test("Regression: hotels", False, f"Exception: {str(e)}")
+        all_passed = False
+    
+    # Test settings/rates still has XAF
+    try:
+        response = requests.get(f"{API_BASE}/settings/rates", timeout=10)
+        if response.status_code != 200:
+            log_test("Regression: settings/rates", False, f"HTTP {response.status_code}")
+            all_passed = False
+        else:
+            data = response.json()
+            rates = data.get('rates', {})
+            if 'XAF' not in rates:
+                log_test("Regression: XAF in rates", False, "XAF not found")
+                all_passed = False
+            else:
+                log_test("Regression: XAF in rates", True, f"XAF: {rates['XAF']}")
+    except Exception as e:
+        log_test("Regression: settings", False, f"Exception: {str(e)}")
+        all_passed = False
+    
+    return all_passed
+
+# Global variables for test data
+admin_token = None
+created_request_id = None
 
 def main():
-    log("=" * 80)
-    log("YABISO HOTELS - CATEGORY FEATURE BACKEND TEST")
-    log("Testing NEW accommodation category feature (Phase 1 Multi-Vertical)")
-    log("=" * 80)
-    log(f"Base URL: {BASE_URL}")
-    log(f"API Base: {API_BASE}")
-    log("")
+    """Run all tests"""
+    print("=" * 80)
+    print("YABISO HOTELS - Phase 2 Travel Services Backend Test")
+    print(f"Base URL: {BASE_URL}")
+    print(f"API Base: {API_BASE}")
+    print("=" * 80)
     
-    all_results = {}
+    # Run all tests
+    test_get_all_services()
+    test_filter_by_type()
+    test_filter_by_city()
+    test_get_single_service()
+    test_create_service_request()
+    test_service_request_validation()
+    test_admin_auth()
+    test_admin_update_status()
+    test_regression()
     
-    # Test 1: Category Filter
-    test1_results = test_category_filter()
-    all_results['test1'] = test1_results
+    # Summary
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
     
-    # Test 2: Migration Idempotency
-    test2_results = test_migration_idempotency()
-    all_results['test2'] = test2_results
+    passed = sum(1 for r in test_results if "✅ PASS" in r)
+    failed = sum(1 for r in test_results if "❌ FAIL" in r)
+    total = len(test_results)
     
-    # Test 3: Import sets category
-    test3_results = test_import_sets_category()
-    all_results['test3'] = test3_results
+    for result in test_results:
+        print(result)
     
-    # Test 4: Regression
-    test4_results = test_regression()
-    all_results['test4'] = test4_results
+    print("\n" + "=" * 80)
+    print(f"TOTAL: {passed}/{total} tests passed, {failed} failed")
+    print("=" * 80)
     
-    # Final Summary
-    log("\n" + "=" * 80)
-    log("FINAL TEST SUMMARY")
-    log("=" * 80)
-    
-    test1_pass = all(v.get('pass', False) for v in test1_results.values())
-    test2_pass = all(v.get('pass', False) for v in test2_results.values())
-    test3_pass = all(v.get('pass', False) for v in test3_results.values())
-    test4_pass = all(v.get('pass', False) for v in test4_results.values())
-    
-    log(f"\nTEST 1 - CATEGORY FILTER: {'✅ PASS' if test1_pass else '❌ FAIL'}")
-    log(f"  - hotel filter: {test1_results['hotel']['count']} hotels")
-    log(f"  - apartment filter: {test1_results['apartment']['count']} apartments")
-    log(f"  - vacation_home filter: {test1_results['vacation_home']['count']} vacation homes")
-    log(f"  - short_stay filter: {test1_results['short_stay']['count']} short stays")
-    log(f"  - total hotels: {test1_results['all']['count']}")
-    log(f"  - combined filter: {test1_results['combined']['count']} hotels (hotel + Brazzaville)")
-    
-    log(f"\nTEST 2 - MIGRATION IDEMPOTENCY: {'✅ PASS' if test2_pass else '❌ FAIL'}")
-    log(f"  - Hotel count stable at {test2_results['call1']['count']}")
-    log(f"  - No duplication across 3 seed calls")
-    
-    log(f"\nTEST 3 - IMPORT SETS CATEGORY: {'✅ PASS' if test3_pass else '❌ FAIL'}")
-    log(f"  - Imported {test3_results['import']['count']} hotels from Owando")
-    log(f"  - All have category field set")
-    
-    log(f"\nTEST 4 - REGRESSION: {'✅ PASS' if test4_pass else '❌ FAIL'}")
-    log(f"  - Featured filter: {test4_results['featured']['count']} hotels")
-    log(f"  - XAF rate: {test4_results['rates']['xaf']}")
-    log(f"  - CDF booking: {test4_results['booking']['reference']}")
-    
-    all_pass = test1_pass and test2_pass and test3_pass and test4_pass
-    
-    log("\n" + "=" * 80)
-    if all_pass:
-        log("✅ ALL TESTS PASSED")
-        log("=" * 80)
-        sys.exit(0)
-    else:
-        log("❌ SOME TESTS FAILED")
-        log("=" * 80)
-        sys.exit(1)
+    return failed == 0
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    success = main()
+    exit(0 if success else 1)

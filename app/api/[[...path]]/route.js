@@ -135,6 +135,33 @@ async function notifyBooking(booking) {
   ])
 }
 
+async function notifyServiceRequest(req) {
+  const c = req.customer || {}
+  const details = `
+    <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+      <tr><td style="padding:6px 0;color:#6b7280;">Référence</td><td style="padding:6px 0;font-weight:bold;">${req.reference}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Service</td><td style="padding:6px 0;font-weight:bold;">${req.serviceName || '-'}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Ville</td><td style="padding:6px 0;">${req.city || '-'}, ${req.country || ''}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Date</td><td style="padding:6px 0;">${req.date || '-'}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Quantité</td><td style="padding:6px 0;">${req.quantity || 1}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280;">Montant estimé</td><td style="padding:6px 0;font-weight:bold;color:#1e3a8a;">${req.totalDisplay} ${req.currency}</td></tr>
+    </table>`
+  const adminHtml = emailLayout('Nouvelle demande de service', `
+    <p>Une nouvelle demande de service vient d'être reçue :</p>${details}
+    <p style="margin-top:12px;color:#6b7280;">Client : <strong>${c.name || '-'}</strong> — ${c.email || '-'} — ${c.phone || '-'}</p>
+    ${req.notes ? `<p style="margin-top:8px;color:#6b7280;">Note : ${req.notes}</p>` : ''}`)
+  const clientHtml = emailLayout(`Demande reçue — ${req.reference}`, `
+    <p>Bonjour ${c.name || ''},</p>
+    <p>Nous avons bien reçu votre demande pour <strong>${req.serviceName}</strong> sur YABISO. Notre équipe vous contactera pour confirmer.</p>
+    ${details}
+    <p style="margin-top:16px;">Merci de votre confiance,<br/>L'équipe YABISO</p>`)
+  await Promise.all([
+    sendEmailSafe({ to: ADMIN_EMAIL, subject: 'Nouvelle demande de service — ' + req.reference, html: adminHtml }),
+    c.email ? sendEmailSafe({ to: c.email, subject: 'Votre demande YABISO ' + req.reference, html: clientHtml }) : Promise.resolve(),
+  ])
+}
+
+
 async function ensureAdmin(db) {
   const existing = await db.collection('users').findOne({ email: 'admin@yabiso.com' })
   if (!existing) {
@@ -181,6 +208,47 @@ const DEFAULT_RATES = { USD: 2850, EUR: 3080, GBP: 3600, XAF: 4.7 }
 const DEFAULT_FEE = 0.07 // 7% markup on foreign currency payments
 const DEFAULT_COMMISSION = 0.3 // 30% YABISO commission
 const ONLINE_MARKUP = 1.2 // +20% markup applied to hotels imported online (Google Places)
+
+const IMG = {
+  ex1: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&w=900&q=80',
+  ex2: 'https://images.unsplash.com/photo-1577971132997-c10be9372519?auto=format&fit=crop&w=900&q=80',
+  ex3: 'https://images.pexels.com/photos/5574045/pexels-photo-5574045.jpeg?auto=compress&cs=tinysrgb&w=900',
+  ex4: 'https://images.pexels.com/photos/14074141/pexels-photo-14074141.jpeg?auto=compress&cs=tinysrgb&w=900',
+  tr1: 'https://images.unsplash.com/photo-1495150434753-f8ceb319e9dc?auto=format&fit=crop&w=900&q=80',
+  tr2: 'https://images.unsplash.com/photo-1769000480434-94113189f154?auto=format&fit=crop&w=900&q=80',
+  tr3: 'https://images.pexels.com/photos/15511266/pexels-photo-15511266.jpeg?auto=compress&cs=tinysrgb&w=900',
+  tr4: 'https://images.unsplash.com/photo-1647206826104-6df8ef5fc59f?auto=format&fit=crop&w=900&q=80',
+  tx1: 'https://images.unsplash.com/photo-1628947733273-cdae71c9bfd3?auto=format&fit=crop&w=900&q=80',
+  tx2: 'https://images.unsplash.com/photo-1613638377394-281765460baa?auto=format&fit=crop&w=900&q=80',
+  tx3: 'https://images.pexels.com/photos/13918522/pexels-photo-13918522.jpeg?auto=compress&cs=tinysrgb&w=900',
+  tx4: 'https://images.pexels.com/photos/11171626/pexels-photo-11171626.jpeg?auto=compress&cs=tinysrgb&w=900',
+  cr1: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80',
+  cr2: 'https://images.unsplash.com/photo-1506015391300-4802dc74de2e?auto=format&fit=crop&w=900&q=80',
+  cr3: 'https://images.unsplash.com/photo-1622893288761-823ba60f17a6?auto=format&fit=crop&w=900&q=80',
+  cr4: 'https://images.pexels.com/photos/36548466/pexels-photo-36548466.jpeg?auto=compress&cs=tinysrgb&w=900',
+}
+const SAMPLE_SERVICES = [
+  // Excursions
+  { key: 'exc-kin-fleuve', type: 'excursion', name: 'Croisière sur le fleuve Congo', nameEn: 'Congo River Cruise', city: 'Kinshasa', province: 'Kinshasa', country: 'RD Congo', priceCDF: 65000, unit: 'par personne', unitEn: 'per person', meta: '3 heures', metaEn: '3 hours', image: IMG.ex1, description: "Croisière guidée au coucher du soleil sur le majestueux fleuve Congo, avec boissons de bienvenue.", descriptionEn: 'Guided sunset cruise on the majestic Congo River, with welcome drinks.' },
+  { key: 'exc-kin-zongo', type: 'excursion', name: 'Excursion aux Chutes de Zongo', nameEn: 'Zongo Falls Day Trip', city: 'Kinshasa', province: 'Kongo Central', country: 'RD Congo', priceCDF: 95000, unit: 'par personne', unitEn: 'per person', meta: 'Journée complète', metaEn: 'Full day', image: IMG.ex2, description: "Journée nature aux impressionnantes chutes de Zongo : transport, guide et déjeuner inclus.", descriptionEn: 'Full nature day at the impressive Zongo Falls: transport, guide and lunch included.' },
+  { key: 'exc-bzv-rapides', type: 'excursion', name: 'Visite des Rapides de Brazzaville', nameEn: 'Brazzaville Rapids Tour', city: 'Brazzaville', province: 'Brazzaville', country: 'Congo-Brazzaville', priceCDF: 55000, unit: 'par personne', unitEn: 'per person', meta: '4 heures', metaEn: '4 hours', image: IMG.ex3, description: "Découverte des célèbres rapides du fleuve Congo et du marché artisanal de Brazzaville.", descriptionEn: 'Discover the famous Congo River rapids and the Brazzaville craft market.' },
+  { key: 'exc-goma-nyiragongo', type: 'excursion', name: 'Randonnée du volcan Nyiragongo', nameEn: 'Nyiragongo Volcano Trek', city: 'Goma', province: 'Nord-Kivu', country: 'RD Congo', priceCDF: 180000, unit: 'par personne', unitEn: 'per person', meta: '2 jours', metaEn: '2 days', image: IMG.ex4, description: "Trek guidé jusqu'au cratère du Nyiragongo et nuit au sommet face au lac de lave.", descriptionEn: 'Guided trek to the Nyiragongo crater and overnight at the summit facing the lava lake.' },
+  // Transferts aéroport
+  { key: 'tr-kin-ndjili', type: 'transfer', name: "Transfert Aéroport N'Djili ↔ Kinshasa", nameEn: "N'Djili Airport ↔ Kinshasa Transfer", city: 'Kinshasa', province: 'Kinshasa', country: 'RD Congo', priceCDF: 45000, unit: 'par trajet', unitEn: 'per trip', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tr1, description: "Transfert privé climatisé entre l'aéroport international de N'Djili et votre hôtel.", descriptionEn: "Private air-conditioned transfer between N'Djili International Airport and your hotel." },
+  { key: 'tr-bzv-maya', type: 'transfer', name: 'Transfert Aéroport Maya-Maya ↔ Brazzaville', nameEn: 'Maya-Maya Airport ↔ Brazzaville Transfer', city: 'Brazzaville', province: 'Brazzaville', country: 'Congo-Brazzaville', priceCDF: 40000, unit: 'par trajet', unitEn: 'per trip', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tr2, description: "Navette privée entre l'aéroport Maya-Maya et le centre de Brazzaville.", descriptionEn: 'Private shuttle between Maya-Maya Airport and downtown Brazzaville.' },
+  { key: 'tr-goma', type: 'transfer', name: 'Transfert Aéroport de Goma ↔ Hôtels', nameEn: 'Goma Airport ↔ Hotels Transfer', city: 'Goma', province: 'Nord-Kivu', country: 'RD Congo', priceCDF: 35000, unit: 'par trajet', unitEn: 'per trip', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tr3, description: "Transfert sécurisé entre l'aéroport de Goma et votre hébergement.", descriptionEn: 'Secure transfer between Goma Airport and your accommodation.' },
+  { key: 'tr-pnr', type: 'transfer', name: 'Transfert Aéroport Pointe-Noire ↔ Ville', nameEn: 'Pointe-Noire Airport ↔ City Transfer', city: 'Pointe-Noire', province: 'Pointe-Noire', country: 'Congo-Brazzaville', priceCDF: 42000, unit: 'par trajet', unitEn: 'per trip', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tr4, description: "Navette privée entre l'aéroport Agostinho-Neto et le centre de Pointe-Noire.", descriptionEn: 'Private shuttle between Agostinho-Neto Airport and downtown Pointe-Noire.' },
+  // Taxis
+  { key: 'tx-kin', type: 'taxi', name: 'Taxi privé en ville - Kinshasa', nameEn: 'Private City Taxi - Kinshasa', city: 'Kinshasa', province: 'Kinshasa', country: 'RD Congo', priceCDF: 18000, unit: 'par course', unitEn: 'per ride', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tx1, description: "Course en taxi privé climatisé à travers Kinshasa, chauffeur professionnel.", descriptionEn: 'Private air-conditioned taxi ride across Kinshasa with a professional driver.' },
+  { key: 'tx-bzv', type: 'taxi', name: 'Taxi privé - Brazzaville', nameEn: 'Private Taxi - Brazzaville', city: 'Brazzaville', province: 'Brazzaville', country: 'Congo-Brazzaville', priceCDF: 16000, unit: 'par course', unitEn: 'per ride', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tx2, description: "Déplacements en taxi privé dans Brazzaville et ses environs.", descriptionEn: 'Private taxi rides in Brazzaville and surroundings.' },
+  { key: 'tx-lub', type: 'taxi', name: 'VTC chauffeur journée - Lubumbashi', nameEn: 'Chauffeur Day Hire - Lubumbashi', city: 'Lubumbashi', province: 'Haut-Katanga', country: 'RD Congo', priceCDF: 120000, unit: 'par jour', unitEn: 'per day', meta: 'Chauffeur dédié', metaEn: 'Dedicated driver', image: IMG.tx3, description: "Véhicule avec chauffeur à votre disposition toute la journée à Lubumbashi.", descriptionEn: 'Vehicle with driver at your disposal all day in Lubumbashi.' },
+  { key: 'tx-goma', type: 'taxi', name: 'Taxi sécurisé - Goma', nameEn: 'Secure Taxi - Goma', city: 'Goma', province: 'Nord-Kivu', country: 'RD Congo', priceCDF: 12000, unit: 'par course', unitEn: 'per ride', meta: "Jusqu'à 4 pers.", metaEn: 'Up to 4 pax', image: IMG.tx4, description: "Service de taxi privé sécurisé pour vos déplacements à Goma.", descriptionEn: 'Secure private taxi service for getting around Goma.' },
+  // Location de voitures
+  { key: 'cr-kin-lc', type: 'car_rental', name: 'Toyota Land Cruiser + chauffeur - Kinshasa', nameEn: 'Toyota Land Cruiser + driver - Kinshasa', city: 'Kinshasa', province: 'Kinshasa', country: 'RD Congo', priceCDF: 150000, unit: 'par jour', unitEn: 'per day', meta: '7 places · chauffeur', metaEn: '7 seats · driver', image: IMG.cr1, description: "4x4 robuste avec chauffeur expérimenté, idéal pour la ville et les pistes.", descriptionEn: 'Rugged 4x4 with experienced driver, ideal for city and off-road.' },
+  { key: 'cr-bzv-berline', type: 'car_rental', name: 'Berline climatisée - Brazzaville', nameEn: 'Air-conditioned Sedan - Brazzaville', city: 'Brazzaville', province: 'Brazzaville', country: 'Congo-Brazzaville', priceCDF: 90000, unit: 'par jour', unitEn: 'per day', meta: '4 places', metaEn: '4 seats', image: IMG.cr2, description: "Berline confortable et climatisée, avec ou sans chauffeur.", descriptionEn: 'Comfortable air-conditioned sedan, with or without driver.' },
+  { key: 'cr-goma-4x4', type: 'car_rental', name: 'SUV 4x4 tout-terrain - Goma', nameEn: 'Off-road 4x4 SUV - Goma', city: 'Goma', province: 'Nord-Kivu', country: 'RD Congo', priceCDF: 130000, unit: 'par jour', unitEn: 'per day', meta: '5 places', metaEn: '5 seats', image: IMG.cr3, description: "SUV 4x4 parfait pour les routes du Nord-Kivu et excursions nature.", descriptionEn: 'Perfect 4x4 SUV for North Kivu roads and nature trips.' },
+  { key: 'cr-pnr-suv', type: 'car_rental', name: 'SUV familial - Pointe-Noire', nameEn: 'Family SUV - Pointe-Noire', city: 'Pointe-Noire', province: 'Pointe-Noire', country: 'Congo-Brazzaville', priceCDF: 110000, unit: 'par jour', unitEn: 'per day', meta: '7 places', metaEn: '7 seats', image: IMG.cr4, description: "Grand SUV familial spacieux, idéal pour explorer la côte.", descriptionEn: 'Spacious family SUV, ideal for exploring the coast.' },
+]
 
 async function getSettings(db) {
   let s = await db.collection('settings').findOne({ id: 'global' })
@@ -309,12 +377,27 @@ async function seedImportedHotels(db) {
   } catch (e) { console.error('[migrate] seedImportedHotels failed', e?.message || e) }
 }
 
+async function seedServicesV1(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.seedServicesV1) return
+    let inserted = 0
+    for (const s of SAMPLE_SERVICES) {
+      const exists = await db.collection('services').findOne({ key: s.key })
+      if (!exists) { await db.collection('services').insertOne({ id: uuidv4(), ...s, featured: true, createdAt: new Date() }); inserted++ }
+    }
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', seedServicesV1: true } }, { upsert: true })
+    if (inserted) console.log('[migrate] seedServicesV1 inserted', inserted, 'services')
+  } catch (e) { console.error('[migrate] seedServicesV1 failed', e?.message || e) }
+}
+
 async function seed(db) {
   const count = await db.collection('hotels').countDocuments()
   if (count > 0) {
     await migrateFeatureCongo(db)
     await seedImportedHotels(db)
     await assignCategoriesV1(db)
+    await seedServicesV1(db)
     return { seeded: false, hotels: await db.collection('hotels').countDocuments() }
   }
   const hotels = buildHotels()
@@ -727,6 +810,67 @@ async function handleRoute(request, { params }) {
       const reviews = await db.collection('reviews').find({ hotelId: path[1] }).sort({ createdAt: -1 }).toArray()
       const { _id, ...rest } = hotel
       return handleCORS(NextResponse.json({ ...rest, reviews: clean(reviews) }))
+    }
+
+    // ---------------- Services (Phase 2: excursions, transfers, taxis, car rental) ----------------
+    if (route === '/services' && method === 'GET') {
+      const sp = new URL(request.url).searchParams
+      const stype = sp.get('type') || ''
+      const city = (sp.get('city') || '').toLowerCase()
+      const country = sp.get('country') || ''
+      let services = await db.collection('services').find({}).toArray()
+      if (stype) services = services.filter((s) => s.type === stype)
+      if (city) services = services.filter((s) => (s.city || '').toLowerCase().includes(city))
+      if (country) services = services.filter((s) => s.country === country)
+      return handleCORS(NextResponse.json(clean(services)))
+    }
+    if (path[0] === 'services' && path[1] && method === 'GET') {
+      const svc = await db.collection('services').findOne({ id: path[1] })
+      if (!svc) return handleCORS(NextResponse.json({ error: 'Service not found' }, { status: 404 }))
+      const { _id, ...rest } = svc
+      return handleCORS(NextResponse.json(rest))
+    }
+    if (route === '/service-requests' && method === 'POST') {
+      const body = await request.json()
+      const svc = await db.collection('services').findOne({ id: body.serviceId })
+      if (!svc) return handleCORS(NextResponse.json({ error: 'Service introuvable' }, { status: 404 }))
+      const c = body.customer || {}
+      if (!c.name || !c.email) return handleCORS(NextResponse.json({ error: 'Nom et email du client requis' }, { status: 400 }))
+      const quantity = Math.max(1, parseInt(body.quantity || 1))
+      const currency = body.currency || 'CDF'
+      const settings = await getSettings(db)
+      const totalCDF = svc.priceCDF * quantity
+      let totalDisplay = Math.round(totalCDF)
+      if (currency !== 'CDF') { const r = (settings.rates || {})[currency] || 1; totalDisplay = Math.round((totalCDF / r) * (1 + (settings.fee || 0))) }
+      const reqDoc = {
+        id: uuidv4(), reference: 'SRV-' + genCode('').replace('-', '') + Math.floor(Math.random() * 90 + 10),
+        serviceId: svc.id, serviceType: svc.type, serviceName: svc.name, city: svc.city, country: svc.country,
+        date: body.date || '', quantity, notes: body.notes || '',
+        customer: { name: c.name, email: c.email, phone: c.phone || '' },
+        priceCDF: svc.priceCDF, totalCDF, currency, totalDisplay,
+        status: 'pending', statusHistory: [{ key: 'pending', at: new Date() }], createdAt: new Date(),
+      }
+      await db.collection('service_requests').insertOne({ ...reqDoc })
+      notifyServiceRequest(reqDoc).catch((e) => console.error('[email] notifyServiceRequest failed', e?.message || e))
+      return handleCORS(NextResponse.json(reqDoc))
+    }
+    if (route === '/service-requests' && method === 'GET') {
+      const u = await getAuthUser(db, request)
+      if (!u || u.role !== 'admin') return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      const reqs = await db.collection('service_requests').find({}).sort({ createdAt: -1 }).toArray()
+      return handleCORS(NextResponse.json(clean(reqs)))
+    }
+    if (path[0] === 'service-requests' && path[1] && method === 'PUT') {
+      const u = await getAuthUser(db, request)
+      if (!u || u.role !== 'admin') return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      const body = await request.json()
+      const allowed = ['pending', 'confirmed', 'cancelled', 'completed']
+      const status = allowed.includes(body.status) ? body.status : 'pending'
+      await db.collection('service_requests').updateOne({ id: path[1] }, { $set: { status }, $push: { statusHistory: { key: status, at: new Date() } } })
+      const updated = await db.collection('service_requests').findOne({ id: path[1] })
+      if (!updated) return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
+      const { _id, ...rest } = updated
+      return handleCORS(NextResponse.json(rest))
     }
 
     // Reviews

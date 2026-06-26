@@ -102,11 +102,13 @@ const STAY_CATS = [
   { key: 'vacation_home', icon: KeyRound, fr: 'Maisons de vacances', en: 'Vacation homes' },
   { key: 'short_stay', icon: BedDouble, fr: 'Courte durée', en: 'Short stays' },
 ]
+const SERVICE_VERTICALS = [
+  { type: 'excursion', icon: Compass, fr: 'Excursions', en: 'Tours' },
+  { type: 'transfer', icon: Bus, fr: 'Transferts aéroport', en: 'Airport transfers' },
+  { type: 'taxi', icon: Car, fr: 'Taxis', en: 'Taxis' },
+  { type: 'car_rental', icon: KeyRound, fr: 'Location de voitures', en: 'Car rental' },
+]
 const SERVICES_SOON = [
-  { icon: Compass, fr: 'Excursions', en: 'Tours' },
-  { icon: Bus, fr: 'Transferts aéroport', en: 'Airport transfers' },
-  { icon: Car, fr: 'Taxis', en: 'Taxis' },
-  { icon: KeyRound, fr: 'Location de voitures', en: 'Car rental' },
   { icon: Plane, fr: 'Vols', en: 'Flights' },
   { icon: ShieldCheck, fr: 'Assurances voyage', en: 'Travel insurance' },
 ]
@@ -1191,6 +1193,12 @@ function App() {
   })
   const [sugOpen, setSugOpen] = useState(false)
   const [category, setCategory] = useState('')
+  const [serviceType, setServiceType] = useState('excursion')
+  const [services, setServices] = useState([])
+  const [svcModal, setSvcModal] = useState(null)
+  const [svcForm, setSvcForm] = useState({ name: '', email: '', phone: '', date: '', quantity: 1, notes: '' })
+  const [svcResult, setSvcResult] = useState(null)
+  const [svcSubmitting, setSvcSubmitting] = useState(false)
 
   const t = useCallback((k) => T[lang][k], [lang])
   const typeLabel = useCallback((ty) => T[lang].types[ty] || ty, [lang])
@@ -1254,6 +1262,27 @@ function App() {
 
   const pickCategory = (key) => { setCategory(key); loadHotels({ category: key }); goto('search') }
 
+  const loadServices = async (type) => {
+    try { const r = await fetch('/api/services?type=' + type); setServices(await r.json()) } catch { setServices([]) }
+  }
+  const openServices = (type) => { setServiceType(type); loadServices(type); goto('services') }
+  const openSvcRequest = (svc) => {
+    setSvcResult(null)
+    setSvcForm({ name: user?.name || '', email: user?.email || '', phone: '', date: '', quantity: 1, notes: '' })
+    setSvcModal(svc)
+  }
+  const submitSvcRequest = async () => {
+    if (!svcForm.name || !svcForm.email) { toast.error(lang === 'fr' ? 'Nom et email requis' : 'Name and email required'); return }
+    setSvcSubmitting(true)
+    try {
+      const r = await fetch('/api/service-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ serviceId: svcModal.id, date: svcForm.date, quantity: svcForm.quantity, currency, customer: { name: svcForm.name, email: svcForm.email, phone: svcForm.phone }, notes: svcForm.notes }) })
+      const d = await r.json()
+      if (r.ok) { setSvcResult(d); toast.success(lang === 'fr' ? 'Demande envoyée !' : 'Request sent!') }
+      else toast.error(d.error || 'Error')
+    } catch { toast.error('Network error') }
+    setSvcSubmitting(false)
+  }
+
   const ServiceTabs = ({ light }) => (
     <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
       {STAY_CATS.map((c) => {
@@ -1263,6 +1292,17 @@ function App() {
           <button key={c.key || 'all'} onClick={() => pickCategory(c.key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap text-sm font-medium transition shrink-0 ${active ? 'bg-primary text-primary-foreground border-primary shadow' : light ? 'bg-white/15 text-white border-white/30 hover:bg-white/25 backdrop-blur' : 'bg-card text-foreground border-border hover:bg-accent'}`}>
             <Icon className="h-4 w-4" />{lang === 'fr' ? c.fr : c.en}
+          </button>
+        )
+      })}
+      <div className={`w-px shrink-0 mx-1 ${light ? 'bg-white/30' : 'bg-border'}`} />
+      {SERVICE_VERTICALS.map((s) => {
+        const Icon = s.icon
+        const active = view === 'services' && serviceType === s.type
+        return (
+          <button key={s.type} onClick={() => openServices(s.type)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap text-sm font-medium transition shrink-0 ${active ? 'bg-primary text-primary-foreground border-primary shadow' : light ? 'bg-white/15 text-white border-white/30 hover:bg-white/25 backdrop-blur' : 'bg-card text-foreground border-border hover:bg-accent'}`}>
+            <Icon className="h-4 w-4" />{lang === 'fr' ? s.fr : s.en}
           </button>
         )
       })}
@@ -1331,6 +1371,7 @@ function App() {
         <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
           <button onClick={() => { goto('home'); loadHotels() }} className="hover:text-primary transition">{t('nav_home')}</button>
           <button onClick={() => goto('search')} className="hover:text-primary transition">{t('nav_destinations')}</button>
+          <button onClick={() => openServices('excursion')} className="hover:text-primary transition flex items-center gap-1"><Compass className="h-4 w-4" />Services</button>
           <button onClick={() => goto('partner')} className="hover:text-primary transition">{t('nav_partner')}</button>
           <button onClick={() => goto('agent')} className="hover:text-primary transition flex items-center gap-1"><UserCog className="h-4 w-4" />Espace Agent</button>
         </nav>
@@ -1617,6 +1658,60 @@ function App() {
           <Button onClick={() => goto('partner')} className="mt-6 bg-[#F4B400] text-black hover:bg-[#d99f00] font-semibold gap-2">{t('partner_cta')}<ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>
+    </main>
+  )
+
+
+  /* ----------------------------- SERVICES (Phase 2) ----------------------------- */
+  const svcTypeLabel = (type) => {
+    const v = SERVICE_VERTICALS.find((s) => s.type === type)
+    return v ? (lang === 'fr' ? v.fr : v.en) : type
+  }
+  const ServicesView = () => (
+    <main className="container py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl md:text-3xl font-extrabold">{lang === 'fr' ? 'Services de voyage YABISO' : 'YABISO Travel Services'}</h1>
+        <p className="text-muted-foreground mt-1">{lang === 'fr' ? 'Excursions, transferts, taxis et location de voitures partout en Afrique.' : 'Excursions, transfers, taxis and car rental across Africa.'}</p>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-6" style={{ scrollbarWidth: 'none' }}>
+        {SERVICE_VERTICALS.map((s) => {
+          const Icon = s.icon
+          const active = serviceType === s.type
+          return (
+            <button key={s.type} onClick={() => openServices(s.type)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap text-sm font-medium transition shrink-0 ${active ? 'bg-primary text-primary-foreground border-primary shadow' : 'bg-card text-foreground border-border hover:bg-accent'}`}>
+              <Icon className="h-4 w-4" />{lang === 'fr' ? s.fr : s.en}
+            </button>
+          )
+        })}
+      </div>
+      {services.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">{lang === 'fr' ? 'Aucun service disponible pour le moment.' : 'No service available yet.'}</div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {services.map((s) => (
+            <Card key={s.id} className="overflow-hidden group">
+              <div className="relative h-48 overflow-hidden">
+                <img src={s.image} alt={s.name} className="h-full w-full object-cover group-hover:scale-105 transition duration-500" />
+                <Badge className="absolute top-3 left-3 bg-[#F4B400] text-black hover:bg-[#F4B400] font-semibold">{svcTypeLabel(s.type)}</Badge>
+              </div>
+              <CardContent className="p-4 space-y-2">
+                <h3 className="font-bold leading-tight">{lang === 'fr' ? s.name : (s.nameEn || s.name)}</h3>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{s.city}, {s.country}</div>
+                <p className="text-sm text-muted-foreground line-clamp-2">{lang === 'fr' ? s.description : (s.descriptionEn || s.description)}</p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarCheck className="h-3.5 w-3.5" />{lang === 'fr' ? s.meta : (s.metaEn || s.meta)}</div>
+                <div className="flex items-center justify-between pt-2">
+                  <div>
+                    <div className="text-lg font-extrabold text-primary">{fmt(s.priceCDF)}</div>
+                    <div className="text-[11px] text-muted-foreground">{lang === 'fr' ? s.unit : (s.unitEn || s.unit)}</div>
+                  </div>
+                  <Button onClick={() => openSvcRequest(s)} className="gap-1">{lang === 'fr' ? 'Réserver' : 'Book'}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </main>
   )
 
@@ -2100,6 +2195,7 @@ function App() {
       <Header />
       {view === 'home' && Home()}
       {view === 'search' && SearchView()}
+      {view === 'services' && ServicesView()}
       {view === 'hotel' && <HotelView />}
       {view === 'booking' && <BookingView />}
       {view === 'confirmation' && <ConfirmationView />}
@@ -2110,6 +2206,46 @@ function App() {
       {view === 'admin' && <AdminDashboard lang={lang} token={token} onBack={() => goto('home')} />}
       {view === 'owner' && <OwnerDashboard lang={lang} token={token} user={user} onBack={() => goto('home')} />}
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} lang={lang} onSuccess={onAuthSuccess} />
+      <Dialog open={!!svcModal} onOpenChange={(o) => { if (!o) { setSvcModal(null); setSvcResult(null) } }}>
+        <DialogContent className="max-w-md">
+          {svcResult ? (
+            <div className="text-center py-4">
+              <div className="mx-auto h-14 w-14 rounded-full bg-green-100 flex items-center justify-center mb-3"><CalendarCheck className="h-7 w-7 text-green-600" /></div>
+              <DialogHeader><DialogTitle className="text-center">{lang === 'fr' ? 'Demande envoyée !' : 'Request sent!'}</DialogTitle></DialogHeader>
+              <p className="text-sm text-muted-foreground mt-2">{lang === 'fr' ? 'Votre référence' : 'Your reference'}</p>
+              <p className="text-xl font-extrabold text-primary tracking-wide">{svcResult.reference}</p>
+              <p className="text-sm text-muted-foreground mt-3">{lang === 'fr' ? 'Notre équipe vous contactera par email pour confirmer.' : 'Our team will contact you by email to confirm.'}</p>
+              <div className="mt-4 text-sm"><span className="text-muted-foreground">{lang === 'fr' ? 'Montant estimé : ' : 'Estimated amount: '}</span><strong>{SYMBOLS[svcResult.currency]}{(svcResult.totalDisplay || 0).toLocaleString('fr-FR')}{svcResult.currency === 'CDF' ? ' FC' : ''}</strong></div>
+              <Button className="w-full mt-5" onClick={() => { setSvcModal(null); setSvcResult(null) }}>{lang === 'fr' ? 'Fermer' : 'Close'}</Button>
+            </div>
+          ) : svcModal ? (
+            <div>
+              <DialogHeader><DialogTitle>{lang === 'fr' ? 'Réserver : ' : 'Book: '}{lang === 'fr' ? svcModal.name : (svcModal.nameEn || svcModal.name)}</DialogTitle></DialogHeader>
+              <div className="flex items-center gap-3 my-3 p-2 rounded-lg bg-muted/50">
+                <img src={svcModal.image} alt="" className="h-12 w-12 rounded object-cover" />
+                <div className="text-sm"><div className="font-semibold">{fmt(svcModal.priceCDF)} <span className="text-xs text-muted-foreground font-normal">{lang === 'fr' ? svcModal.unit : (svcModal.unitEn || svcModal.unit)}</span></div><div className="text-xs text-muted-foreground">{svcModal.city}, {svcModal.country}</div></div>
+              </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>{lang === 'fr' ? 'Nom complet' : 'Full name'}</Label><Input value={svcForm.name} onChange={(e) => setSvcForm({ ...svcForm, name: e.target.value })} className="mt-1" /></div>
+                  <div><Label>{lang === 'fr' ? 'Téléphone' : 'Phone'}</Label><Input value={svcForm.phone} onChange={(e) => setSvcForm({ ...svcForm, phone: e.target.value })} className="mt-1" /></div>
+                </div>
+                <div><Label>Email</Label><Input type="email" value={svcForm.email} onChange={(e) => setSvcForm({ ...svcForm, email: e.target.value })} className="mt-1" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>{lang === 'fr' ? 'Date souhaitée' : 'Preferred date'}</Label><Input type="date" value={svcForm.date} onChange={(e) => setSvcForm({ ...svcForm, date: e.target.value })} className="mt-1" /></div>
+                  <div><Label>{lang === 'fr' ? 'Quantité' : 'Quantity'}</Label><Input type="number" min={1} value={svcForm.quantity} onChange={(e) => setSvcForm({ ...svcForm, quantity: Math.max(1, parseInt(e.target.value || 1)) })} className="mt-1" /></div>
+                </div>
+                <div><Label>{lang === 'fr' ? 'Notes (optionnel)' : 'Notes (optional)'}</Label><Textarea value={svcForm.notes} onChange={(e) => setSvcForm({ ...svcForm, notes: e.target.value })} className="mt-1" rows={2} /></div>
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-sm text-muted-foreground">{lang === 'fr' ? 'Total estimé' : 'Estimated total'}</div>
+                  <div className="text-lg font-extrabold text-primary">{fmt(svcModal.priceCDF * (svcForm.quantity || 1))}</div>
+                </div>
+                <Button className="w-full" disabled={svcSubmitting} onClick={submitSvcRequest}>{svcSubmitting ? '...' : (lang === 'fr' ? 'Envoyer la demande' : 'Send request')}</Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   )

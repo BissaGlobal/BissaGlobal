@@ -1251,6 +1251,8 @@ function App() {
   const [adMuted, setAdMuted] = useState(true)
   const adCounter = useRef(0)
   const adHideTimer = useRef(null)
+  const adUnmuteTimer = useRef(null)
+  const adVideoRef = useRef(null)
   useEffect(() => {
     const showAd = () => {
       setAdIndex(adCounter.current % AD_VIDEOS.length)
@@ -1258,12 +1260,24 @@ function App() {
       setAdMuted(true)
       setAdOpen(true)
       if (adHideTimer.current) clearTimeout(adHideTimer.current)
+      if (adUnmuteTimer.current) clearTimeout(adUnmuteTimer.current)
+      adUnmuteTimer.current = setTimeout(() => setAdMuted(false), 5000) // auto-unmute after 5s
       adHideTimer.current = setTimeout(() => setAdOpen(false), 60000) // play for up to 60s
     }
     const first = setTimeout(showAd, 20000) // first ad ~20s after arrival
     const interval = setInterval(showAd, 300000) // then every 5 minutes
-    return () => { clearTimeout(first); clearInterval(interval); if (adHideTimer.current) clearTimeout(adHideTimer.current) }
+    return () => { clearTimeout(first); clearInterval(interval); if (adHideTimer.current) clearTimeout(adHideTimer.current); if (adUnmuteTimer.current) clearTimeout(adUnmuteTimer.current) }
   }, [])
+  // Try to keep the ad playing; auto-unmute after 5s, but if the browser blocks
+  // sound autoplay, revert to muted so the video keeps playing silently.
+  useEffect(() => {
+    const v = adVideoRef.current
+    if (!adOpen || !v) return
+    const p = v.play?.()
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => { if (!v.muted) setAdMuted(true) })
+    }
+  }, [adMuted, adOpen, adIndex])
 
   const t = useCallback((k) => T[lang][k], [lang])
   const typeLabel = useCallback((ty) => T[lang].types[ty] || ty, [lang])
@@ -2321,7 +2335,7 @@ function App() {
             className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition">
             <X className="h-4 w-4" />
           </button>
-          <video key={adIndex} src={AD_VIDEOS[adIndex]} autoPlay muted={adMuted} playsInline preload="auto"
+          <video key={adIndex} ref={adVideoRef} src={AD_VIDEOS[adIndex]} autoPlay muted={adMuted} playsInline preload="auto"
             onEnded={() => { if (adHideTimer.current) clearTimeout(adHideTimer.current); setAdOpen(false) }}
             className="w-full h-auto block max-h-[420px] object-cover bg-black" />
           <div className="absolute bottom-2 right-2 z-10 flex gap-2">

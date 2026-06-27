@@ -1,7 +1,7 @@
 'use client'
 
 import { LOGO_LIGHT, LOGO_DARK } from './brandLogos'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,7 @@ import {
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
-  Home, BedDouble, Compass, Bus, KeyRound,
+  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -116,6 +116,12 @@ const CAT_LABELS = {
   fr: { hotel: 'Hôtel', apartment: 'Appartement', vacation_home: 'Maison de vacances', short_stay: 'Courte durée' },
   en: { hotel: 'Hotel', apartment: 'Apartment', vacation_home: 'Vacation home', short_stay: 'Short stay' },
 }
+const AD_VIDEOS = [
+  'https://customer-assets.emergentagent.com/job_yabiso-hotels/artifacts/j3b804du_GENERATE_VIDEO.mp4',
+  'https://customer-assets.emergentagent.com/job_yabiso-hotels/artifacts/q8cme1qk_Create_a_premium_second_cin.mp4',
+  'https://customer-assets.emergentagent.com/job_yabiso-hotels/artifacts/e7kn0lpx_PROMPT_GEMINI_VEO_Cr%C3%A9er_une_vi.mp4',
+  'https://customer-assets.emergentagent.com/job_yabiso-hotels/artifacts/l0h6gidp_mp4.mp4',
+]
 const PAYMENTS = [
   { id: 'visa', label: 'Visa' }, { id: 'mastercard', label: 'Mastercard' }, { id: 'stripe', label: 'Stripe' },
   { id: 'paypal', label: 'PayPal' }, { id: 'orange', label: 'Orange Money' }, { id: 'airtel', label: 'Airtel Money' },
@@ -1240,6 +1246,24 @@ function App() {
   const [svcForm, setSvcForm] = useState({ name: '', email: '', phone: '', date: '', quantity: 1, notes: '' })
   const [svcResult, setSvcResult] = useState(null)
   const [svcSubmitting, setSvcSubmitting] = useState(false)
+  const [adOpen, setAdOpen] = useState(false)
+  const [adIndex, setAdIndex] = useState(0)
+  const [adMuted, setAdMuted] = useState(true)
+  const adCounter = useRef(0)
+  const adHideTimer = useRef(null)
+  useEffect(() => {
+    const showAd = () => {
+      setAdIndex(adCounter.current % AD_VIDEOS.length)
+      adCounter.current += 1
+      setAdMuted(true)
+      setAdOpen(true)
+      if (adHideTimer.current) clearTimeout(adHideTimer.current)
+      adHideTimer.current = setTimeout(() => setAdOpen(false), 60000) // play for up to 60s
+    }
+    const first = setTimeout(showAd, 20000) // first ad ~20s after arrival
+    const interval = setInterval(showAd, 300000) // then every 5 minutes
+    return () => { clearTimeout(first); clearInterval(interval); if (adHideTimer.current) clearTimeout(adHideTimer.current) }
+  }, [])
 
   const t = useCallback((k) => T[lang][k], [lang])
   const typeLabel = useCallback((ty) => T[lang].types[ty] || ty, [lang])
@@ -2287,6 +2311,32 @@ function App() {
           ) : null}
         </DialogContent>
       </Dialog>
+      {adOpen && AD_VIDEOS[adIndex] && (
+        <div className="fixed bottom-4 right-4 z-[70] w-[290px] sm:w-[340px] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold bg-amber-400 text-black px-1.5 py-0.5 rounded">{lang === 'fr' ? 'PUBLICITÉ' : 'AD'}</span>
+            <img src={LOGO_DARK} alt="YABISO" className="h-4 w-auto opacity-90" />
+          </div>
+          <button onClick={() => { if (adHideTimer.current) clearTimeout(adHideTimer.current); setAdOpen(false) }} aria-label="Fermer"
+            className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition">
+            <X className="h-4 w-4" />
+          </button>
+          <video key={adIndex} src={AD_VIDEOS[adIndex]} autoPlay muted={adMuted} playsInline preload="auto"
+            onEnded={() => { if (adHideTimer.current) clearTimeout(adHideTimer.current); setAdOpen(false) }}
+            className="w-full h-auto block max-h-[420px] object-cover bg-black" />
+          <div className="absolute bottom-2 right-2 z-10 flex gap-2">
+            <button onClick={() => setAdMuted((m) => !m)}
+              className="flex items-center gap-1 text-xs font-medium bg-black/60 text-white px-2.5 py-1.5 rounded-full hover:bg-black/80 transition">
+              {adMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              {adMuted ? (lang === 'fr' ? 'Activer le son' : 'Unmute') : (lang === 'fr' ? 'Muet' : 'Mute')}
+            </button>
+          </div>
+          <button onClick={() => { if (adHideTimer.current) clearTimeout(adHideTimer.current); setAdOpen(false); goto('search') }}
+            className="absolute bottom-2 left-2 z-10 text-xs font-semibold bg-primary text-primary-foreground px-2.5 py-1.5 rounded-full hover:opacity-90 transition">
+            {lang === 'fr' ? 'Réserver' : 'Book now'}
+          </button>
+        </div>
+      )}
       <Footer />
     </div>
   )

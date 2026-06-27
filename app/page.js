@@ -1262,7 +1262,7 @@ function App() {
       if (adHideTimer.current) clearTimeout(adHideTimer.current)
       if (adUnmuteTimer.current) clearTimeout(adUnmuteTimer.current)
       adUnmuteTimer.current = setTimeout(() => setAdMuted(false), 5000) // auto-unmute after 5s
-      adHideTimer.current = setTimeout(() => setAdOpen(false), 60000) // play for up to 60s
+      adHideTimer.current = setTimeout(() => setAdOpen(false), 65000) // 5s muted + 60s with sound
     }
     const first = setTimeout(showAd, 20000) // first ad ~20s after arrival
     const interval = setInterval(showAd, 300000) // then every 5 minutes
@@ -2335,8 +2335,7 @@ function App() {
             className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition">
             <X className="h-4 w-4" />
           </button>
-          <video key={adIndex} ref={adVideoRef} src={AD_VIDEOS[adIndex]} autoPlay muted={adMuted} playsInline preload="auto"
-            onEnded={() => { if (adHideTimer.current) clearTimeout(adHideTimer.current); setAdOpen(false) }}
+          <video key={adIndex} ref={adVideoRef} src={AD_VIDEOS[adIndex]} autoPlay loop muted={adMuted} playsInline preload="auto"
             className="w-full h-auto block max-h-[420px] object-cover bg-black" />
           <div className="absolute bottom-2 right-2 z-10 flex gap-2">
             <button onClick={() => setAdMuted((m) => !m)}

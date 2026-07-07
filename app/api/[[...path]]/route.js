@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import IMPORTED_HOTELS from './importedHotels.json'
+import { ICON_192, ICON_512 } from '../../pwaIcons'
 
 // ---------------- Auth helpers (simple JWT-like HMAC) ----------------
 const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
@@ -810,6 +811,13 @@ async function handleRoute(request, { params }) {
       const reviews = await db.collection('reviews').find({ hotelId: path[1] }).sort({ createdAt: -1 }).toArray()
       const { _id, ...rest } = hotel
       return handleCORS(NextResponse.json({ ...rest, reviews: clean(reviews) }))
+    }
+
+    // ---------------- PWA icons (served via /api to work in production) ----------------
+    if (path[0] === 'pwa' && method === 'GET') {
+      const b64 = path[1] === 'icon-512' ? ICON_512 : ICON_192
+      const buf = Buffer.from(b64, 'base64')
+      return handleCORS(new Response(buf, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable' } }))
     }
 
     // ---------------- Services (Phase 2: excursions, transfers, taxis, car rental) ----------------

@@ -544,7 +544,18 @@ frontend:
         -working: "NA"
         -agent: "testing"
         -comment: "PARTIAL TEST - Section 1 (Mobile Money + QR + Invoice) PASSED. Tested: Homepage search 'Kinshasa' (11 hotels), hotel detail (Pullman Kinshasa Grand Hôtel), booking page with Orange Money selection, Mobile Money section visible with YABISO account info, Numéro payeur field, ID transaction field, Téléverser screenshot area. Form filled (QA Customer Mobile Money, qa.customer@yabiso.test, +243990001234, OM-QA-1), payment submitted. Confirmation page shows: 'Réservation enregistrée !' title, booking reference YBS-FQ7JP6 and YBS-5UU6NC (correct format), QR code visible, payment badge 'En attente de vérification' (gold/yellow), 'Voir / Imprimer la facture' button. Invoice page verified: YABISO HOTELS header, FACTURE label, Client section, Hébergement section, Total section, Print button all visible. Section 1 fully functional. Sections 2-6 NOT TESTED due to admin login timing issue (avatar not appearing immediately after login, causing dropdown click to timeout). Recommend: Main agent should verify admin login flow or add wait time after login for avatar to appear."
-  - task: "Destination autocomplete (Booking.com style) + SearchBar focus fix"
+  - task: "Advanced search filters (price slider, type, amenities, rating) + sorting"
+    implemented: true
+    working: "NA"
+    file: "app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "NEW: Advanced client-side filters added to SearchView. Left sidebar FilterPanel with: (1) Property type Select (reuses server type filter via loadHotels), (2) Price range Slider in the selected display currency (bounds computed from loaded hotels via priceIn, auto-reset on currency/results change), (3) Minimum rating pills (Toutes/3+/3.5+/4+/4.5+), (4) Amenities checkboxes from AMENITIES (AND match). Added sort dropdown (Pertinence/Prix croissant/Prix décroissant/Meilleures notes). Results header + grid now use filteredHotels (useMemo over hotels+filters+priceRange+sortBy). Active filter count badge + Réinitialiser button. Mobile: filters collapsible via 'Afficher les filtres' toggle (hidden lg:block sidebar). Manually verified via screenshot: Kinshasa search 21 results -> 4.5+ rating -> 8 results, Réinitialiser appears, price slider shows $49-$124 in USD. FR/EN translations added."
+    needs_retesting: true
     implemented: true
     working: true
     file: "app/page.js"

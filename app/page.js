@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
@@ -23,6 +24,7 @@ import {
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
   Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink, ChevronRight,
+  SlidersHorizontal, RotateCcw, ArrowDownUp,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -41,6 +43,10 @@ const T = {
     reviews: 'Avis', similar: 'Hébergements similaires', whatsapp: 'Contacter sur WhatsApp', select_room: 'Choisir',
     results_for: 'Résultats pour', results: 'hébergements trouvés', no_results: 'Aucun hébergement trouvé. Essayez une autre recherche.',
     filters: 'Filtres', all_types: 'Tous les types', sort: 'Trier', back: 'Retour',
+    f_price: 'Fourchette de prix', f_type: 'Type de propriété', f_amenities: 'Équipements', f_rating: 'Note minimale',
+    f_reset: 'Réinitialiser', f_any: 'Toutes', f_show: 'Afficher les filtres', f_hide: 'Masquer',
+    sort_relevance: 'Pertinence', sort_price_asc: 'Prix croissant', sort_price_desc: 'Prix décroissant', sort_rating: 'Meilleures notes',
+    f_active: 'filtre(s) actif(s)',
     booking_title: 'Finaliser votre réservation', your_stay: 'Votre séjour', nights: 'nuit(s)',
     your_info: 'Vos informations', full_name: 'Nom complet', email: 'Email', phone: 'Téléphone',
     payment: 'Paiement', payment_method: 'Méthode de paiement', price_summary: 'Récapitulatif du prix',
@@ -66,6 +72,10 @@ const T = {
     reviews: 'Reviews', similar: 'Similar stays', whatsapp: 'Contact on WhatsApp', select_room: 'Select',
     results_for: 'Results for', results: 'stays found', no_results: 'No stays found. Try another search.',
     filters: 'Filters', all_types: 'All types', sort: 'Sort', back: 'Back',
+    f_price: 'Price range', f_type: 'Property type', f_amenities: 'Amenities', f_rating: 'Minimum rating',
+    f_reset: 'Reset', f_any: 'Any', f_show: 'Show filters', f_hide: 'Hide',
+    sort_relevance: 'Relevance', sort_price_asc: 'Price: low to high', sort_price_desc: 'Price: high to low', sort_rating: 'Top rated',
+    f_active: 'active filter(s)',
     booking_title: 'Complete your booking', your_stay: 'Your stay', nights: 'night(s)',
     your_info: 'Your information', full_name: 'Full name', email: 'Email', phone: 'Phone',
     payment: 'Payment', payment_method: 'Payment method', price_summary: 'Price summary',
@@ -1233,6 +1243,12 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false)
   const [myBookings, setMyBookings] = useState([])
 
+  // Advanced search filters (client-side)
+  const [filters, setFilters] = useState({ amenities: [], minRating: 0 })
+  const [priceRange, setPriceRange] = useState(null) // [lo, hi] in display currency
+  const [sortBy, setSortBy] = useState('relevance')
+  const [showFilters, setShowFilters] = useState(false)
+
   const today = new Date()
   const [search, setSearch] = useState({
     q: '', type: '', checkIn: fmtDateInput(new Date(today.getTime() + 86400000)),
@@ -1317,6 +1333,42 @@ function App() {
     if (currency === 'CDF') return v.toLocaleString('fr-FR') + ' FC'
     return SYMBOLS[currency] + v.toLocaleString('fr-FR')
   }, [priceIn, currency])
+
+  // Price bounds in the current display currency, from loaded hotels
+  const priceBounds = useMemo(() => {
+    if (!hotels.length) return [0, 100]
+    const vals = hotels.map((h) => priceIn(h.priceCDF || 0))
+    return [Math.min(...vals), Math.max(...vals)]
+  }, [hotels, priceIn])
+
+  // Reset the price slider whenever bounds change (new results or currency switch)
+  useEffect(() => { setPriceRange([priceBounds[0], priceBounds[1]]) }, [priceBounds])
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0
+    if (filters.amenities.length) n += filters.amenities.length
+    if (filters.minRating > 0) n += 1
+    if (priceRange && (priceRange[0] > priceBounds[0] || priceRange[1] < priceBounds[1])) n += 1
+    return n
+  }, [filters, priceRange, priceBounds])
+
+  const filteredHotels = useMemo(() => {
+    let list = hotels.filter((h) => {
+      const p = priceIn(h.priceCDF || 0)
+      if (priceRange && (p < priceRange[0] || p > priceRange[1])) return false
+      if (filters.minRating > 0 && (h.rating || 0) < filters.minRating) return false
+      if (filters.amenities.length && !filters.amenities.every((a) => (h.amenities || []).includes(a))) return false
+      return true
+    })
+    if (sortBy === 'price_asc') list = [...list].sort((a, b) => (a.priceCDF || 0) - (b.priceCDF || 0))
+    else if (sortBy === 'price_desc') list = [...list].sort((a, b) => (b.priceCDF || 0) - (a.priceCDF || 0))
+    else if (sortBy === 'rating') list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    return list
+  }, [hotels, filters, priceRange, sortBy, priceIn])
+
+  const toggleFilterAmenity = (k) => setFilters((f) => ({ ...f, amenities: f.amenities.includes(k) ? f.amenities.filter((x) => x !== k) : [...f.amenities, k] }))
+  const resetFilters = () => { setFilters({ amenities: [], minRating: 0 }); setPriceRange([priceBounds[0], priceBounds[1]]); setSortBy('relevance') }
+
 
   const goto = (v) => { setView(v); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
@@ -1795,29 +1847,121 @@ function App() {
   )
 
   /* ----------------------------- SEARCH ----------------------------- */
+  const curLabel = (v) => currency === 'CDF' ? (Math.round(v).toLocaleString('fr-FR') + ' FC') : (SYMBOLS[currency] + Math.round(v).toLocaleString('fr-FR'))
+
+  const FilterPanel = () => (
+    <div className="rounded-xl border bg-card p-4 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-bold"><SlidersHorizontal className="h-4 w-4 text-primary" />{t('filters')}</div>
+        {activeFilterCount > 0 && (
+          <button onClick={resetFilters} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"><RotateCcw className="h-3 w-3" />{t('f_reset')}</button>
+        )}
+      </div>
+
+      {/* Property type */}
+      <div>
+        <Label className="text-sm font-semibold">{t('f_type')}</Label>
+        <Select value={search.type || 'all'} onValueChange={(v) => { const ty = v === 'all' ? '' : v; setSearch({ ...search, type: ty }); loadHotels({ q: search.q, type: ty, guests: search.guests, category }) }}>
+          <SelectTrigger className="h-9 mt-2 w-full"><SelectValue placeholder={t('all_types')} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('all_types')}</SelectItem>
+            {Object.keys(T[lang].types).map((k) => <SelectItem key={k} value={k}>{typeLabel(k)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Price range */}
+      <div>
+        <Label className="text-sm font-semibold">{t('f_price')}</Label>
+        {priceRange && priceBounds[1] > priceBounds[0] && (
+          <div className="mt-3">
+            <Slider
+              min={priceBounds[0]} max={priceBounds[1]} step={Math.max(1, Math.round((priceBounds[1] - priceBounds[0]) / 100))}
+              value={[priceRange[0], priceRange[1]]}
+              onValueChange={(v) => setPriceRange(v)}
+              className="mt-1"
+            />
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+              <span className="font-medium text-foreground">{curLabel(priceRange[0])}</span>
+              <span className="font-medium text-foreground">{curLabel(priceRange[1])}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Minimum rating */}
+      <div>
+        <Label className="text-sm font-semibold">{t('f_rating')}</Label>
+        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+          <button onClick={() => setFilters((f) => ({ ...f, minRating: 0 }))} className={`text-xs rounded-full px-2.5 py-1 border transition ${filters.minRating === 0 ? 'bg-primary text-primary-foreground border-primary' : 'hover:border-primary'}`}>{t('f_any')}</button>
+          {[3, 3.5, 4, 4.5].map((r) => (
+            <button key={r} onClick={() => setFilters((f) => ({ ...f, minRating: f.minRating === r ? 0 : r }))} className={`text-xs rounded-full px-2.5 py-1 border transition flex items-center gap-1 ${filters.minRating === r ? 'bg-primary text-primary-foreground border-primary' : 'hover:border-primary'}`}>
+              <Star className={`h-3 w-3 ${filters.minRating === r ? 'fill-white text-white' : 'fill-[#F4B400] text-[#F4B400]'}`} />{r}+
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Amenities */}
+      <div>
+        <Label className="text-sm font-semibold">{t('f_amenities')}</Label>
+        <div className="grid grid-cols-1 gap-2 mt-2">
+          {Object.entries(AMENITIES).map(([k, m]) => {
+            const Ic = m.icon
+            return (
+              <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox checked={filters.amenities.includes(k)} onCheckedChange={() => toggleFilterAmenity(k)} />
+                <Ic className="h-4 w-4 text-primary" />{m[lang]}
+              </label>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+
   const SearchView = () => (
     <main className="container py-8">
       <div className="mb-6">{SearchBar({ compact: true })}</div>
       <div className="mb-5">{ServiceTabs({})}</div>
+
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <h2 className="text-xl font-bold">{hotels.length} {t('results')}{search.q ? ` · ${search.q}` : ''}</h2>
-        <div className="ml-auto">
-          <Select value={search.type || 'all'} onValueChange={(v) => { const ty = v === 'all' ? '' : v; setSearch({ ...search, type: ty }); loadHotels({ q: search.q, type: ty, guests: search.guests, category }) }}>
-            <SelectTrigger className="h-9 w-[180px]"><SelectValue placeholder={t('all_types')} /></SelectTrigger>
+        <h2 className="text-xl font-bold">{filteredHotels.length} {t('results')}{search.q ? ` · ${search.q}` : ''}</h2>
+        <Button variant="outline" size="sm" className="lg:hidden gap-1.5 h-9" onClick={() => setShowFilters((s) => !s)}>
+          <SlidersHorizontal className="h-4 w-4" />{showFilters ? t('f_hide') : t('f_show')}
+          {activeFilterCount > 0 && <span className="ml-1 text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1.5">{activeFilterCount}</span>}
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <ArrowDownUp className="h-4 w-4 text-muted-foreground hidden sm:block" />
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="h-9 w-[190px]"><SelectValue placeholder={t('sort')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{t('all_types')}</SelectItem>
-              {Object.keys(T[lang].types).map((k) => <SelectItem key={k} value={k}>{typeLabel(k)}</SelectItem>)}
+              <SelectItem value="relevance">{t('sort_relevance')}</SelectItem>
+              <SelectItem value="price_asc">{t('sort_price_asc')}</SelectItem>
+              <SelectItem value="price_desc">{t('sort_price_desc')}</SelectItem>
+              <SelectItem value="rating">{t('sort_rating')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
-      {loading ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-80 rounded-xl bg-muted animate-pulse" />)}</div>
-      ) : hotels.length === 0 ? (
-        <div className="py-20 text-center text-muted-foreground">{t('no_results')}</div>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{hotels.map((h) => <HotelCard key={h.id} h={h} />)}</div>
-      )}
+
+      <div className="grid gap-6 lg:grid-cols-4">
+        <aside className={`${showFilters ? 'block' : 'hidden'} lg:block lg:col-span-1`}>
+          <div className="lg:sticky lg:top-24">{FilterPanel()}</div>
+        </aside>
+        <div className="lg:col-span-3">
+          {loading ? (
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-80 rounded-xl bg-muted animate-pulse" />)}</div>
+          ) : filteredHotels.length === 0 ? (
+            <div className="py-20 text-center text-muted-foreground">
+              {t('no_results')}
+              {activeFilterCount > 0 && <div className="mt-4"><Button variant="outline" size="sm" onClick={resetFilters} className="gap-1"><RotateCcw className="h-3.5 w-3.5" />{t('f_reset')}</Button></div>}
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{filteredHotels.map((h) => <HotelCard key={h.id} h={h} />)}</div>
+          )}
+        </div>
+      </div>
     </main>
   )
 

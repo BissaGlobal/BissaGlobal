@@ -22,7 +22,7 @@ import {
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
-  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink,
+  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink, ChevronRight,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -2263,31 +2263,31 @@ function App() {
           <div className="rounded-2xl bg-white text-foreground p-5 sm:p-6 shadow-2xl">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#0057B8] to-[#E4002B] flex items-center justify-center text-white shrink-0">
-                <Briefcase className="h-6 w-6" />
+                <Building2 className="h-6 w-6" />
               </div>
               <div>
-                <div className="font-extrabold text-lg leading-none">YABISO <span className="text-[#0057B8]">Boulot</span></div>
-                <div className="text-xs text-muted-foreground mt-1">{lang === 'fr' ? 'Emploi & Recrutement en RDC' : 'Jobs & Recruitment in DRC'}</div>
+                <div className="font-extrabold text-lg leading-none">YABISO <span className="text-[#0057B8]">Hotels</span></div>
+                <div className="text-xs text-muted-foreground mt-1">{lang === 'fr' ? 'Réservation d\u2019hôtels & voyage en Afrique' : 'Hotel booking & travel in Africa'}</div>
               </div>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
               {lang === 'fr'
-                ? 'Trouvez le bon emploi et construisez votre avenir : offres d\u2019emploi, CV professionnel par IA, formations et recrutement pour les entreprises.'
-                : 'Find the right job and build your future: job offers, AI-powered CV, training and recruitment for companies.'}
+                ? 'Réservez des hôtels, appartements et maisons de vacances vérifiés partout en Afrique subsaharienne, plus excursions, transferts, taxis et location de voitures.'
+                : 'Book verified hotels, apartments and vacation homes across Sub-Saharan Africa, plus tours, transfers, taxis and car rental.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {(lang === 'fr'
-                ? ['Offres d\u2019emploi', 'CV par IA', 'Formations', 'Recrutement RH']
-                : ['Job offers', 'AI CV', 'Training', 'HR recruitment']
+                ? ['Hôtels', 'Appartements', 'Excursions', 'Transferts', 'Location voitures']
+                : ['Hotels', 'Apartments', 'Tours', 'Transfers', 'Car rental']
               ).map((tag) => (
                 <span key={tag} className="text-[11px] font-medium bg-muted text-foreground rounded-full px-2.5 py-1">{tag}</span>
               ))}
             </div>
-            <a href="https://yabisoboulot.com" target="_blank" rel="noreferrer" className="mt-5 block">
-              <Button className="w-full gap-2 bg-[#0057B8] hover:bg-[#004a9e] text-white">
-                {lang === 'fr' ? 'Découvrir YABISO Boulot' : 'Discover YABISO Boulot'}<ExternalLink className="h-4 w-4" />
-              </Button>
-            </a>
+            <button onClick={() => { setCategory(''); loadHotels({}); goto('search') }} className="mt-5 block w-full">
+              <span className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0057B8] hover:bg-[#004a9e] text-white h-10 font-medium text-sm transition">
+                {lang === 'fr' ? 'Réserver maintenant' : 'Book now'}<ChevronRight className="h-4 w-4" />
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -2311,7 +2311,6 @@ function App() {
             <li><a href="/ville" className="hover:text-primary">Hôtels par ville</a></li>
             <li><a href="/rdc" className="hover:text-primary">Hôtels RDC (provinces)</a></li>
             <li><button onClick={() => openServices('excursion')} className="hover:text-primary">{lang === 'fr' ? 'Services (Excursions, Taxis, Transferts, Voitures)' : 'Services (Tours, Taxis, Transfers, Cars)'}</button></li>
-            <li><a href="https://yabisoboulot.com" target="_blank" rel="noreferrer" className="hover:text-primary inline-flex items-center gap-1">YABISO Boulot — {lang === 'fr' ? 'Emploi' : 'Jobs'}<ExternalLink className="h-3 w-3" /></a></li>
           </ul>
         </div>
         <div>

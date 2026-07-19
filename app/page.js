@@ -22,7 +22,7 @@ import {
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
-  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX,
+  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -2235,6 +2235,65 @@ function App() {
   )
 
   /* ----------------------------- Footer ----------------------------- */
+  const EcosystemBanner = () => (
+    <section className="container py-10">
+      <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-[#0057B8] via-[#0a4aa0] to-[#052a63] text-white shadow-xl">
+        <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-[#F4B400]/20 blur-2xl" />
+        <div className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-[#E4002B]/20 blur-2xl" />
+        <div className="relative p-6 sm:p-10 grid lg:grid-cols-2 gap-8 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider bg-white/10 border border-white/20 rounded-full px-3 py-1 backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5 text-[#F4B400]" />{lang === 'fr' ? 'Écosystème BissaGlobal Services' : 'BissaGlobal Services Ecosystem'}
+            </div>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-extrabold leading-tight">
+              {lang === 'fr' ? 'Un écosystème complet pour l\u2019Afrique' : 'A complete ecosystem for Africa'}
+            </h2>
+            <p className="mt-3 text-white/80 max-w-md text-sm sm:text-base">
+              {lang === 'fr'
+                ? 'YABISO fait partie de la famille BissaGlobal Services : voyage, emploi et bien plus, au service des talents et voyageurs africains.'
+                : 'YABISO is part of the BissaGlobal Services family: travel, jobs and more, serving African talents and travelers.'}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <span className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm backdrop-blur">
+                <Building2 className="h-4 w-4 text-[#F4B400]" />YABISO Hotels
+                <span className="text-[10px] bg-[#F4B400] text-black font-bold rounded px-1.5 py-0.5">{lang === 'fr' ? 'Vous êtes ici' : 'You are here'}</span>
+              </span>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white text-foreground p-5 sm:p-6 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#0057B8] to-[#E4002B] flex items-center justify-center text-white shrink-0">
+                <Briefcase className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="font-extrabold text-lg leading-none">YABISO <span className="text-[#0057B8]">Boulot</span></div>
+                <div className="text-xs text-muted-foreground mt-1">{lang === 'fr' ? 'Emploi & Recrutement en RDC' : 'Jobs & Recruitment in DRC'}</div>
+              </div>
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {lang === 'fr'
+                ? 'Trouvez le bon emploi et construisez votre avenir : offres d\u2019emploi, CV professionnel par IA, formations et recrutement pour les entreprises.'
+                : 'Find the right job and build your future: job offers, AI-powered CV, training and recruitment for companies.'}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(lang === 'fr'
+                ? ['Offres d\u2019emploi', 'CV par IA', 'Formations', 'Recrutement RH']
+                : ['Job offers', 'AI CV', 'Training', 'HR recruitment']
+              ).map((tag) => (
+                <span key={tag} className="text-[11px] font-medium bg-muted text-foreground rounded-full px-2.5 py-1">{tag}</span>
+              ))}
+            </div>
+            <a href="https://yabisoboulot.com" target="_blank" rel="noreferrer" className="mt-5 block">
+              <Button className="w-full gap-2 bg-[#0057B8] hover:bg-[#004a9e] text-white">
+                {lang === 'fr' ? 'Découvrir YABISO Boulot' : 'Discover YABISO Boulot'}<ExternalLink className="h-4 w-4" />
+              </Button>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+
   const Footer = () => (
     <footer className="border-t bg-muted/30 mt-10">
       <div className="container py-12 grid gap-8 md:grid-cols-4">
@@ -2251,7 +2310,8 @@ function App() {
             <li><button onClick={() => goto('search')} className="hover:text-primary">{t('nav_destinations')}</button></li>
             <li><a href="/ville" className="hover:text-primary">Hôtels par ville</a></li>
             <li><a href="/rdc" className="hover:text-primary">Hôtels RDC (provinces)</a></li>
-            <li><span className="opacity-60">YABISO Flights · Taxi · Tours (bientôt)</span></li>
+            <li><button onClick={() => openServices('excursion')} className="hover:text-primary">{lang === 'fr' ? 'Services (Excursions, Taxis, Transferts, Voitures)' : 'Services (Tours, Taxis, Transfers, Cars)'}</button></li>
+            <li><a href="https://yabisoboulot.com" target="_blank" rel="noreferrer" className="hover:text-primary inline-flex items-center gap-1">YABISO Boulot — {lang === 'fr' ? 'Emploi' : 'Jobs'}<ExternalLink className="h-3 w-3" /></a></li>
           </ul>
         </div>
         <div>
@@ -2264,7 +2324,11 @@ function App() {
           <a href="https://wa.me/243990000000" target="_blank" rel="noreferrer"><Button variant="outline" size="sm" className="gap-2 border-green-500 text-green-600"><Phone className="h-4 w-4" />WhatsApp</Button></a>
         </div>
       </div>
-      <div className="border-t py-4 text-center text-xs text-muted-foreground">© {new Date().getFullYear()} YABISO HOTELS — AFRICA BOOKS WITH CONFIDENCE.</div>
+      <div className="border-t py-5 text-center text-xs text-muted-foreground space-y-1">
+        <div><strong className="text-foreground">BissaGlobal Services SARL</strong> — {lang === 'fr' ? 'société enregistrée à Kinshasa (RDC)' : 'company registered in Kinshasa (DRC)'}</div>
+        <div>RCCM : CD/KNG/RCCM/23-B-02683 · {lang === 'fr' ? 'N° Impôt' : 'Tax ID'} : A232757OT · {lang === 'fr' ? 'Télécommunications & médias numériques' : 'Telecommunications & digital media'}</div>
+        <div className="pt-1">© {new Date().getFullYear()} YABISO HOTELS — AFRICA BOOKS WITH CONFIDENCE.</div>
+      </div>
     </footer>
   )
 
@@ -2350,6 +2414,7 @@ function App() {
           </button>
         </div>
       )}
+      {EcosystemBanner()}
       <Footer />
     </div>
   )

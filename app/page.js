@@ -684,7 +684,7 @@ function ImportPanel({ lang, at, agentId, onImported }) {
                 <div className="p-3">
                   <div className="font-semibold text-sm leading-tight line-clamp-1">{h.name}</div>
                   <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{h.address}</div>
-                  <div className="flex items-center gap-1 text-xs mt-1"><Star className="h-3 w-3 fill-[#F4B400] text-[#F4B400]" />{h.rating || '—'} · {h.reviewCount || 0} avis</div>
+                  <div className="flex items-center gap-1 text-xs mt-1"><Star className="h-3 w-3 fill-[#F5A623] text-[#F5A623]" />{h.rating || '—'} · {h.reviewCount || 0} avis</div>
                 </div>
               </div>
             ))}
@@ -755,7 +755,7 @@ function AddReviewForm({ lang, hotelId, user, onDone }) {
       <div className="font-semibold text-sm mb-2">{lang === 'fr' ? 'Laisser un avis' : 'Leave a review'}</div>
       <div className="flex items-center gap-1 mb-2">
         {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} onClick={() => setRating(n)}><Star className={`h-5 w-5 ${n <= rating ? 'fill-[#F4B400] text-[#F4B400]' : 'text-muted-foreground'}`} /></button>
+          <button key={n} onClick={() => setRating(n)}><Star className={`h-5 w-5 ${n <= rating ? 'fill-[#F5A623] text-[#F5A623]' : 'text-muted-foreground'}`} /></button>
         ))}
       </div>
       {!user && <Input placeholder={lang === 'fr' ? 'Votre nom' : 'Your name'} value={author} onChange={(e) => setAuthor(e.target.value)} className="mb-2" />}
@@ -942,7 +942,7 @@ function AdminDashboard({ lang, token, onBack }) {
             {bookings.filter((b) => b.payment).length === 0 && <div className="py-10 text-center text-muted-foreground">{lang === 'fr' ? 'Aucun paiement.' : 'No payments.'}</div>}
             {bookings.filter((b) => b.payment).map((b) => {
               const p = b.payment || {}
-              const color = p.status === 'approved' ? 'bg-green-600' : p.status === 'rejected' ? 'bg-destructive' : 'bg-[#F4B400] text-black'
+              const color = p.status === 'approved' ? 'bg-green-600' : p.status === 'rejected' ? 'bg-destructive' : 'bg-[#F5A623] text-black'
               return (
                 <Card key={b.id} className="p-4 border">
                   <div className="flex flex-wrap items-start gap-4">
@@ -1355,12 +1355,12 @@ function AnnouncementBar({ lang, onPartner }) {
   return (
     <div className="relative bg-gradient-to-r from-[#CE1126] via-[#0A1F5C] to-[#0A1F5C] text-white">
       <div className="container flex items-center justify-center gap-3 py-2 text-sm font-medium text-center">
-        <PartyPopper className="h-4 w-4 text-[#F4B400] shrink-0" />
+        <PartyPopper className="h-4 w-4 text-[#F5A623] shrink-0" />
         <span className="truncate sm:whitespace-normal">
-          <strong className="text-[#F4B400]">{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'}</strong>
+          <strong className="text-[#F5A623]">{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'}</strong>
           {lang === 'fr' ? " — 0% de commission pour les nouveaux hôtels partenaires !" : ' — 0% commission for new partner hotels!'}
         </span>
-        <button onClick={onPartner} className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#F4B400] text-black font-semibold px-3 py-1 text-xs hover:bg-[#d99f00] transition shrink-0">
+        <button onClick={onPartner} className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#F5A623] text-black font-semibold px-3 py-1 text-xs hover:bg-[#d98e1f] transition shrink-0">
           {lang === 'fr' ? "J'en profite" : 'Claim offer'}<ArrowRight className="h-3 w-3" />
         </button>
       </div>
@@ -1649,8 +1649,7 @@ function App() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="container flex h-16 items-center justify-between gap-4">
         <button onClick={() => { goto('home'); loadHotels() }} className="flex items-center shrink-0">
-          <img src={LOGO_LIGHT} alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain block dark:hidden" />
-          <img src={LOGO_DARK} alt="YABISO HOTELS — par BissaGlobal Services" className="h-12 w-auto object-contain hidden dark:block" />
+          <img src="/api/brand/logo" alt="YabisoHotels.com — Stay. Manage. Grow." className="h-14 w-auto object-contain" />
         </button>
 
         <nav className="hidden lg:flex items-center gap-6 text-sm font-medium">
@@ -1764,7 +1763,7 @@ function App() {
       <div className="relative h-52 overflow-hidden">
         <img src={h.images[0]} alt={h.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute top-3 left-3 flex gap-2">
-          {h.category && CAT_LABELS[lang][h.category] && <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] border-0 font-semibold">{CAT_LABELS[lang][h.category]}</Badge>}
+          {h.category && CAT_LABELS[lang][h.category] && <Badge className="bg-[#F5A623] text-black hover:bg-[#F5A623] border-0 font-semibold">{CAT_LABELS[lang][h.category]}</Badge>}
           {h.verified && <Badge className="bg-[#0A1F5C] text-white gap-1 hover:bg-[#0A1F5C]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
         </div>
         <button onClick={(e) => { e.stopPropagation(); toggleFav(h.id) }} className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/90 grid place-items-center hover:scale-110 transition">
@@ -1774,7 +1773,7 @@ function App() {
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-bold leading-tight line-clamp-1">{h.name}</h3>
-          <div className="flex items-center gap-1 text-sm font-semibold shrink-0"><Star className="h-3.5 w-3.5 fill-[#F4B400] text-[#F4B400]" />{h.rating}</div>
+          <div className="flex items-center gap-1 text-sm font-semibold shrink-0"><Star className="h-3.5 w-3.5 fill-[#F5A623] text-[#F5A623]" />{h.rating}</div>
         </div>
         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-3.5 w-3.5" />{h.city}, {h.country}</p>
         <div className="mt-3 flex items-end justify-between">
@@ -1823,15 +1822,15 @@ function App() {
           <div className="absolute inset-0 bg-gradient-to-r from-[#0a2a52]/90 via-[#0A1F5C]/70 to-[#0A1F5C]/30" />
         </div>
         <div className="relative container py-20 md:py-28">
-          <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] mb-4 font-semibold">Réservez • Séjournez • Découvrez l'Afrique</Badge>
+          <Badge className="bg-[#F5A623] text-black hover:bg-[#F5A623] mb-4 font-semibold">Réservez • Séjournez • Découvrez l'Afrique</Badge>
           <h1 className="text-4xl md:text-6xl font-extrabold text-white max-w-3xl leading-tight drop-shadow">{t('hero_title')}</h1>
           <p className="mt-4 text-lg text-white/90 max-w-2xl">{t('hero_sub')}</p>
           <div className="mt-6 max-w-5xl">{ServiceTabs({ light: true })}</div>
           <div className="mt-4 max-w-5xl">{SearchBar({})}</div>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/90">
-            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[#F4B400]" />Hôtels vérifiés</span>
-            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-[#F4B400]" />Paiement sécurisé multi-devises</span>
-            <span className="flex items-center gap-1.5"><Globe className="h-4 w-4 text-[#F4B400]" />Toute l'Afrique subsaharienne</span>
+            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[#F5A623]" />Hôtels vérifiés</span>
+            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-[#F5A623]" />Paiement sécurisé multi-devises</span>
+            <span className="flex items-center gap-1.5"><Globe className="h-4 w-4 text-[#F5A623]" />Toute l'Afrique subsaharienne</span>
           </div>
         </div>
       </section>
@@ -1899,7 +1898,7 @@ function App() {
           <div className="grid gap-5 md:grid-cols-3">
             {reviewsHome.map((r, i) => (
               <Card key={i} className="p-6 border">
-                <Quote className="h-7 w-7 text-[#F4B400]" />
+                <Quote className="h-7 w-7 text-[#F5A623]" />
                 <p className="mt-3 text-sm">{lang === 'fr' ? r.fr : r.en}</p>
                 <div className="mt-4 flex items-center gap-3">
                   <Avatar><AvatarFallback className="bg-primary text-primary-foreground">{r.author[0]}</AvatarFallback></Avatar>
@@ -1907,7 +1906,7 @@ function App() {
                     <div className="font-semibold text-sm">{r.author}</div>
                     <div className="text-xs text-muted-foreground">{r.city}</div>
                   </div>
-                  <div className="ml-auto flex">{Array.from({ length: r.rating }).map((_, k) => <Star key={k} className="h-3.5 w-3.5 fill-[#F4B400] text-[#F4B400]" />)}</div>
+                  <div className="ml-auto flex">{Array.from({ length: r.rating }).map((_, k) => <Star key={k} className="h-3.5 w-3.5 fill-[#F5A623] text-[#F5A623]" />)}</div>
                 </div>
               </Card>
             ))}
@@ -1918,21 +1917,28 @@ function App() {
       {/* Promo banner: 2 months free */}
       <section className="container py-6">
         <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0A1F5C] via-[#0A1F5C] to-[#003a7a] text-white p-8 md:p-10">
-          <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#F4B400]/20 blur-2xl" />
-          <div className="absolute right-6 top-6 hidden md:block"><Gift className="h-24 w-24 text-[#F4B400]/30" /></div>
-          <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] font-bold mb-3 gap-1"><PartyPopper className="h-3.5 w-3.5" />{lang === 'fr' ? 'Offre de lancement' : 'Launch offer'}</Badge>
+          <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#F5A623]/20 blur-2xl" />
+          <div className="absolute right-6 top-6 hidden md:block"><Gift className="h-24 w-24 text-[#F5A623]/30" /></div>
+          <Badge className="bg-[#F5A623] text-black hover:bg-[#F5A623] font-bold mb-3 gap-1"><PartyPopper className="h-3.5 w-3.5" />{lang === 'fr' ? 'Offre de lancement' : 'Launch offer'}</Badge>
           <h2 className="text-3xl md:text-4xl font-extrabold max-w-2xl">
             {lang === 'fr' ? 'Hôteliers : ' : 'Hoteliers: '}
-            <span className="text-[#F4B400]">{lang === 'fr' ? '2 mois gratuits' : '2 months free'}</span>
+            <span className="text-[#F5A623]">{lang === 'fr' ? '2 mois gratuits' : '2 months free'}</span>
             {lang === 'fr' ? ' — 0% de commission' : ' — 0% commission'}
           </h2>
           <p className="mt-3 max-w-xl text-white/90">{lang === 'fr' ? "Inscrivez votre établissement aujourd'hui et ne payez aucune commission pendant 2 mois. Photographie professionnelle, vérification et marketing diaspora inclus." : 'List your property today and pay zero commission for 2 months. Professional photography, verification and diaspora marketing included.'}</p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button onClick={() => goto('partner')} className="bg-[#F4B400] text-black hover:bg-[#d99f00] font-semibold gap-2">{lang === 'fr' ? "J'inscris mon hôtel" : 'List my hotel'}<ArrowRight className="h-4 w-4" /></Button>
+            <Button onClick={() => goto('partner')} className="bg-[#F5A623] text-black hover:bg-[#d98e1f] font-semibold gap-2">{lang === 'fr' ? "J'inscris mon hôtel" : 'List my hotel'}<ArrowRight className="h-4 w-4" /></Button>
             <a href="https://wa.me/243990000000?text=YABISO%202%20mois%20gratuits" target="_blank" rel="noreferrer"><Button variant="outline" className="gap-2 border-white/40 text-white bg-white/10 hover:bg-white/20"><Phone className="h-4 w-4" />WhatsApp</Button></a>
           </div>
           <div className="mt-4 text-xs text-white/70">{lang === 'fr' ? "Offre limitée aux nouveaux partenaires. Conditions appliquées par YABISO HOTELS." : 'Limited to new partners. Terms apply by YABISO HOTELS.'}</div>
         </div>
+      </section>
+
+      {/* White-label platform banner */}
+      <section className="container pt-6 md:pt-10">
+        <button onClick={() => goto('partner')} className="block w-full rounded-2xl overflow-hidden shadow-lg ring-1 ring-black/5 hover:shadow-xl transition-shadow" aria-label={lang === 'fr' ? 'Découvrir la plateforme en marque blanche' : 'Discover the white-label platform'}>
+          <img src="/api/brand/banner" alt={lang === 'fr' ? 'YabisoHotels — Plateforme africaine de commerce hôtelier en marque blanche' : 'YabisoHotels — African white-label hotel commerce platform'} className="w-full h-auto block" loading="lazy" />
+        </button>
       </section>
 
       {/* Partner CTA */}
@@ -1940,7 +1946,7 @@ function App() {
         <div className="rounded-2xl bg-gradient-to-r from-[#0A1F5C] to-[#003a7a] text-white p-10 md:p-14 text-center">
           <h2 className="text-3xl font-extrabold">{t('partner_title')}</h2>
           <p className="mt-3 max-w-2xl mx-auto text-white/90">{t('partner_sub')}</p>
-          <Button onClick={() => goto('partner')} className="mt-6 bg-[#F4B400] text-black hover:bg-[#d99f00] font-semibold gap-2">{t('partner_cta')}<ArrowRight className="h-4 w-4" /></Button>
+          <Button onClick={() => goto('partner')} className="mt-6 bg-[#F5A623] text-black hover:bg-[#d98e1f] font-semibold gap-2">{t('partner_cta')}<ArrowRight className="h-4 w-4" /></Button>
         </div>
       </section>
     </main>
@@ -1978,7 +1984,7 @@ function App() {
             <Card key={s.id} className="overflow-hidden group">
               <div className="relative h-48 overflow-hidden">
                 <img src={s.image} alt={s.name} className="h-full w-full object-cover group-hover:scale-105 transition duration-500" />
-                <Badge className="absolute top-3 left-3 bg-[#F4B400] text-black hover:bg-[#F4B400] font-semibold">{svcTypeLabel(s.type)}</Badge>
+                <Badge className="absolute top-3 left-3 bg-[#F5A623] text-black hover:bg-[#F5A623] font-semibold">{svcTypeLabel(s.type)}</Badge>
               </div>
               <CardContent className="p-4 space-y-2">
                 <h3 className="font-bold leading-tight">{lang === 'fr' ? s.name : (s.nameEn || s.name)}</h3>
@@ -2050,7 +2056,7 @@ function App() {
           <button onClick={() => setFilters((f) => ({ ...f, minRating: 0 }))} className={`text-xs rounded-full px-2.5 py-1 border transition ${filters.minRating === 0 ? 'bg-primary text-primary-foreground border-primary' : 'hover:border-primary'}`}>{t('f_any')}</button>
           {[3, 3.5, 4, 4.5].map((r) => (
             <button key={r} onClick={() => setFilters((f) => ({ ...f, minRating: f.minRating === r ? 0 : r }))} className={`text-xs rounded-full px-2.5 py-1 border transition flex items-center gap-1 ${filters.minRating === r ? 'bg-primary text-primary-foreground border-primary' : 'hover:border-primary'}`}>
-              <Star className={`h-3 w-3 ${filters.minRating === r ? 'fill-white text-white' : 'fill-[#F4B400] text-[#F4B400]'}`} />{r}+
+              <Star className={`h-3 w-3 ${filters.minRating === r ? 'fill-white text-white' : 'fill-[#F5A623] text-[#F5A623]'}`} />{r}+
             </button>
           ))}
         </div>
@@ -2140,7 +2146,7 @@ function App() {
             <p className="text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-4 w-4" />{h.city}, {h.province}, {h.country}</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg bg-primary/10 text-primary px-3 py-2 font-bold"><Star className="h-4 w-4 fill-[#F4B400] text-[#F4B400]" />{h.rating} <span className="text-xs font-normal text-muted-foreground">({h.reviewCount})</span></div>
+            <div className="flex items-center gap-1 rounded-lg bg-primary/10 text-primary px-3 py-2 font-bold"><Star className="h-4 w-4 fill-[#F5A623] text-[#F5A623]" />{h.rating} <span className="text-xs font-normal text-muted-foreground">({h.reviewCount})</span></div>
           </div>
         </div>
 
@@ -2187,7 +2193,7 @@ function App() {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9"><AvatarFallback className="bg-primary text-primary-foreground text-sm">{r.author[0]}</AvatarFallback></Avatar>
                       <div className="font-semibold text-sm">{r.author}</div>
-                      <div className="ml-auto flex">{Array.from({ length: r.rating }).map((_, k) => <Star key={k} className="h-3.5 w-3.5 fill-[#F4B400] text-[#F4B400]" />)}</div>
+                      <div className="ml-auto flex">{Array.from({ length: r.rating }).map((_, k) => <Star key={k} className="h-3.5 w-3.5 fill-[#F5A623] text-[#F5A623]" />)}</div>
                     </div>
                     <p className="text-sm text-muted-foreground mt-2">{r.comment}</p>
                   </Card>
@@ -2383,7 +2389,7 @@ function App() {
     return (
       <main className="container py-12 max-w-3xl">
         <div className="text-center">
-          <div className={`mx-auto h-16 w-16 rounded-full grid place-items-center mb-4 ${pending ? 'bg-[#F4B400]/20' : 'bg-green-100 dark:bg-green-950'}`}>{pending ? <Wallet className="h-9 w-9 text-[#F4B400]" /> : <CheckCircle2 className="h-9 w-9 text-green-600" />}</div>
+          <div className={`mx-auto h-16 w-16 rounded-full grid place-items-center mb-4 ${pending ? 'bg-[#F5A623]/20' : 'bg-green-100 dark:bg-green-950'}`}>{pending ? <Wallet className="h-9 w-9 text-[#F5A623]" /> : <CheckCircle2 className="h-9 w-9 text-green-600" />}</div>
           <h1 className="text-2xl md:text-3xl font-extrabold">{pending ? (lang === 'fr' ? 'Réservation enregistrée !' : 'Booking recorded!') : t('conf_title')}</h1>
           <p className="text-muted-foreground mt-2">{pending ? (lang === 'fr' ? 'Votre paiement est en cours de vérification par YABISO. Référence :' : 'Your payment is being verified by YABISO. Reference:') : t('conf_sub')}</p>
           <div className="mt-3 inline-block rounded-xl bg-primary/10 text-primary px-6 py-3 text-2xl font-extrabold tracking-wider">{result.reference}</div>
@@ -2408,7 +2414,7 @@ function App() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">{lang === 'fr' ? 'Paiement' : 'Payment'} · {(pay.method || '').toUpperCase()}</div>
-                <Badge className={`mt-1 ${pay.status === 'approved' ? 'bg-green-600 hover:bg-green-600' : pay.status === 'rejected' ? 'bg-destructive hover:bg-destructive' : 'bg-[#F4B400] text-black hover:bg-[#F4B400]'}`}>{pay.status === 'approved' ? (lang === 'fr' ? 'Approuvé' : 'Approved') : pay.status === 'rejected' ? (lang === 'fr' ? 'Rejeté' : 'Rejected') : (lang === 'fr' ? 'En attente de vérification' : 'Pending verification')}</Badge>
+                <Badge className={`mt-1 ${pay.status === 'approved' ? 'bg-green-600 hover:bg-green-600' : pay.status === 'rejected' ? 'bg-destructive hover:bg-destructive' : 'bg-[#F5A623] text-black hover:bg-[#F5A623]'}`}>{pay.status === 'approved' ? (lang === 'fr' ? 'Approuvé' : 'Approved') : pay.status === 'rejected' ? (lang === 'fr' ? 'Rejeté' : 'Rejected') : (lang === 'fr' ? 'En attente de vérification' : 'Pending verification')}</Badge>
               </div>
               <div className="text-xl font-extrabold text-primary">{SYMBOLS[result.currency]}{result.totalDisplay.toLocaleString('fr-FR')}{result.currency === 'CDF' ? ' FC' : ''}</div>
             </div>
@@ -2456,7 +2462,7 @@ function App() {
         <Card className="p-8 border" id="invoice">
           <div className="flex justify-between items-start border-b pb-4 mb-4">
             <div>
-              <div className="text-2xl font-extrabold">YABISO<span className="text-[#F4B400]"> HOTELS</span></div>
+              <div className="text-2xl font-extrabold">YABISO<span className="text-[#F5A623]"> HOTELS</span></div>
               <div className="text-xs text-muted-foreground">Powered by BissaGlobal Services</div>
             </div>
             <div className="text-right text-sm">
@@ -2500,12 +2506,12 @@ function App() {
   const PartnerView = () => (
     <main className="container py-12 max-w-4xl">
       <div className="text-center mb-10">
-        <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] mb-3">YABISO Partners</Badge>
+        <Badge className="bg-[#F5A623] text-black hover:bg-[#F5A623] mb-3">YABISO Partners</Badge>
         <h1 className="text-3xl md:text-4xl font-extrabold">{t('partner_title')}</h1>
         <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">{t('partner_sub')}</p>
       </div>
-      <div className="mb-10 rounded-2xl border-2 border-[#F4B400] bg-[#F4B400]/10 p-6 text-center">
-        <div className="flex items-center justify-center gap-2 text-2xl md:text-3xl font-extrabold"><Gift className="h-7 w-7 text-[#F4B400]" />{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'} <span className="text-primary">· 0% {lang === 'fr' ? 'commission' : 'commission'}</span></div>
+      <div className="mb-10 rounded-2xl border-2 border-[#F5A623] bg-[#F5A623]/10 p-6 text-center">
+        <div className="flex items-center justify-center gap-2 text-2xl md:text-3xl font-extrabold"><Gift className="h-7 w-7 text-[#F5A623]" />{lang === 'fr' ? '2 MOIS GRATUITS' : '2 MONTHS FREE'} <span className="text-primary">· 0% {lang === 'fr' ? 'commission' : 'commission'}</span></div>
         <p className="text-muted-foreground mt-2">{lang === 'fr' ? "Pour tout nouvel hôtel inscrit dès maintenant. Aucune commission prélevée pendant vos 2 premiers mois." : 'For every new hotel listed now. No commission charged during your first 2 months.'}</p>
       </div>
       <div className="grid gap-5 md:grid-cols-3 mb-10">
@@ -2536,12 +2542,12 @@ function App() {
   const EcosystemBanner = () => (
     <section className="container py-10">
       <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-[#0A1F5C] via-[#0a4aa0] to-[#052a63] text-white shadow-xl">
-        <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-[#F4B400]/20 blur-2xl" />
+        <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-[#F5A623]/20 blur-2xl" />
         <div className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-[#E4002B]/20 blur-2xl" />
         <div className="relative p-6 sm:p-10 grid lg:grid-cols-2 gap-8 items-center">
           <div>
             <div className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider bg-white/10 border border-white/20 rounded-full px-3 py-1 backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-[#F4B400]" />{lang === 'fr' ? 'Écosystème BissaGlobal Services' : 'BissaGlobal Services Ecosystem'}
+              <Sparkles className="h-3.5 w-3.5 text-[#F5A623]" />{lang === 'fr' ? 'Écosystème BissaGlobal Services' : 'BissaGlobal Services Ecosystem'}
             </div>
             <h2 className="mt-4 text-2xl sm:text-3xl font-extrabold leading-tight">
               {lang === 'fr' ? 'Un écosystème complet pour l\u2019Afrique' : 'A complete ecosystem for Africa'}
@@ -2553,8 +2559,8 @@ function App() {
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <span className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm backdrop-blur">
-                <Building2 className="h-4 w-4 text-[#F4B400]" />YABISO Hotels
-                <span className="text-[10px] bg-[#F4B400] text-black font-bold rounded px-1.5 py-0.5">{lang === 'fr' ? 'Vous êtes ici' : 'You are here'}</span>
+                <Building2 className="h-4 w-4 text-[#F5A623]" />YABISO Hotels
+                <span className="text-[10px] bg-[#F5A623] text-black font-bold rounded px-1.5 py-0.5">{lang === 'fr' ? 'Vous êtes ici' : 'You are here'}</span>
               </span>
             </div>
           </div>

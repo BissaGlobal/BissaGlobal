@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import IMPORTED_HOTELS from './importedHotels.json'
 import { ICON_192, ICON_512 } from '../../pwaIcons'
+import { LOGO_B64, BANNER_B64 } from '../../brandAssets'
 
 // ---------------- Auth helpers (simple JWT-like HMAC) ----------------
 const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
@@ -606,6 +607,14 @@ async function handleRoute(request, { params }) {
       if (!photoRes.ok) return new NextResponse('Photo error', { status: 502 })
       const buf = Buffer.from(await photoRes.arrayBuffer())
       return new NextResponse(buf, { status: 200, headers: { 'Content-Type': photoRes.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'public, max-age=604800' } })
+    }
+
+    // ---------------- Brand assets (logo + banner) served via /api to bypass /public 404 in prod ----------------
+    if (path[0] === 'brand' && method === 'GET') {
+      const isBanner = path[1] === 'banner'
+      const b64 = isBanner ? BANNER_B64 : LOGO_B64
+      const buf = Buffer.from(b64, 'base64')
+      return handleCORS(new Response(buf, { headers: { 'Content-Type': isBanner ? 'image/jpeg' : 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable' } }))
     }
 
     const db = await connectToMongo()

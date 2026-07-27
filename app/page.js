@@ -23,7 +23,7 @@ import {
   Users, Globe, ArrowRight, BadgeCheck, CheckCircle2, CreditCard, Building2, Quote, Menu, X,
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
-  Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink, ChevronRight,
+  Home as HomeIcon, MessageCircle, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink, ChevronRight,
   SlidersHorizontal, RotateCcw, ArrowDownUp, Palette, Copy,
 } from 'lucide-react'
 
@@ -108,7 +108,7 @@ const SYMBOLS = { CDF: 'FC', USD: '$', EUR: '€', GBP: '£', XAF: 'FCFA' }
 const STAY_CATS = [
   { key: '', icon: Sparkles, fr: 'Tous', en: 'All' },
   { key: 'hotel', icon: Building2, fr: 'Hôtels', en: 'Hotels' },
-  { key: 'apartment', icon: Home, fr: 'Appartements', en: 'Apartments' },
+  { key: 'apartment', icon: HomeIcon, fr: 'Appartements', en: 'Apartments' },
   { key: 'vacation_home', icon: KeyRound, fr: 'Maisons de vacances', en: 'Vacation homes' },
   { key: 'short_stay', icon: BedDouble, fr: 'Courte durée', en: 'Short stays' },
 ]
@@ -1938,7 +1938,7 @@ function App() {
           <p className="mt-3 max-w-xl text-white/90">{lang === 'fr' ? "Inscrivez votre établissement aujourd'hui et ne payez aucune commission pendant 2 mois. Photographie professionnelle, vérification et marketing diaspora inclus." : 'List your property today and pay zero commission for 2 months. Professional photography, verification and diaspora marketing included.'}</p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button onClick={() => goto('partner')} className="bg-[#F5A623] text-black hover:bg-[#d98e1f] font-semibold gap-2">{lang === 'fr' ? "J'inscris mon hôtel" : 'List my hotel'}<ArrowRight className="h-4 w-4" /></Button>
-            <a href="https://wa.me/243990000000?text=YABISO%202%20mois%20gratuits" target="_blank" rel="noreferrer"><Button variant="outline" className="gap-2 border-white/40 text-white bg-white/10 hover:bg-white/20"><Phone className="h-4 w-4" />WhatsApp</Button></a>
+            <a href="https://wa.me/243802720788?text=YABISO%202%20mois%20gratuits" target="_blank" rel="noreferrer"><Button variant="outline" className="gap-2 border-white/40 text-white bg-white/10 hover:bg-white/20"><Phone className="h-4 w-4" />WhatsApp</Button></a>
           </div>
           <div className="mt-4 text-xs text-white/70">{lang === 'fr' ? "Offre limitée aux nouveaux partenaires. Conditions appliquées par YABISO HOTELS." : 'Limited to new partners. Terms apply by YABISO HOTELS.'}</div>
         </div>
@@ -2143,7 +2143,7 @@ function App() {
     if (!selected) return <div className="container py-20 text-center text-muted-foreground">...</div>
     const h = selected
     const similar = hotels.filter((x) => x.id !== h.id && (x.country === h.country || x.type === h.type)).slice(0, 3)
-    const wa = `https://wa.me/243990000000?text=${encodeURIComponent('Bonjour YABISO, je suis intéressé par ' + h.name + ' à ' + h.city)}`
+    const wa = `https://wa.me/243802720788?text=${encodeURIComponent('Bonjour YABISO, je suis intéressé par ' + h.name + ' à ' + h.city)}`
     return (
       <main className="container py-8">
         <button onClick={() => goto('search')} className="text-sm text-muted-foreground hover:text-primary mb-4 flex items-center gap-1"><ArrowRight className="h-3.5 w-3.5 rotate-180" />{t('back')}</button>
@@ -2237,7 +2237,7 @@ function App() {
               <a href={wa} target="_blank" rel="noreferrer" className="mt-4 block">
                 <Button variant="outline" className="w-full gap-2 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"><Phone className="h-4 w-4" />{t('whatsapp')}</Button>
               </a>
-              <a href={`https://wa.me/243990000000?text=${encodeURIComponent('YABISO - Je souhaite reserver : ' + h.name + ' (' + h.city + ')')}`} target="_blank" rel="noreferrer" className="mt-2 block">
+              <a href={`https://wa.me/243802720788?text=${encodeURIComponent('YABISO - Je souhaite reserver : ' + h.name + ' (' + h.city + ')')}`} target="_blank" rel="noreferrer" className="mt-2 block">
                 <Button className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"><Phone className="h-4 w-4" />{lang === 'fr' ? 'Réserver via WhatsApp' : 'Book via WhatsApp'}</Button>
               </a>
               <div className="mt-4 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground flex gap-2">
@@ -2329,7 +2329,7 @@ function App() {
                 <div className="mt-4 rounded-lg border bg-muted/30 p-4 space-y-3">
                   <div className="text-sm font-semibold flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />{isMobile ? (lang === 'fr' ? 'Paiement Mobile Money' : 'Mobile Money payment') : (lang === 'fr' ? 'Virement bancaire' : 'Bank transfer')}</div>
                   <p className="text-xs text-muted-foreground">{lang === 'fr' ? 'Envoyez le montant au compte YABISO ci-dessous, puis renseignez les détails de la transaction. YABISO vérifiera et confirmera votre paiement.' : 'Send the amount to the YABISO account below, then provide the transaction details. YABISO will verify and confirm your payment.'}</p>
-                  <div className="rounded-md bg-background border p-2 text-xs font-mono">{isMobile ? 'YABISO ' + pm.toUpperCase() + ' : +243 99 000 0000 (BissaGlobal Services)' : 'YABISO HOTELS — RAWBANK — Compte: 0123-4567-8901 (BissaGlobal Services)'}</div>
+                  <div className="rounded-md bg-background border p-2 text-xs font-mono">{isMobile ? 'YABISO ' + pm.toUpperCase() + ' : +243 802 720 788 (BissaGlobal Services)' : 'YABISO HOTELS — RAWBANK — Compte: 0123-4567-8901 (BissaGlobal Services)'}</div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div><Label className="text-xs">{isMobile ? (lang === 'fr' ? 'Numéro payeur' : 'Payer phone') : 'IBAN / Réf.'}</Label><Input value={proof.payerPhone} onChange={(e) => setProof({ ...proof, payerPhone: e.target.value })} placeholder={isMobile ? '+243...' : 'Réf. virement'} className="mt-1" /></div>
                     <div><Label className="text-xs">{lang === 'fr' ? 'ID de transaction' : 'Transaction ID'}</Label><Input value={proof.txId} onChange={(e) => setProof({ ...proof, txId: e.target.value })} placeholder="ex: ABC123456" className="mt-1" /></div>
@@ -2506,7 +2506,7 @@ function App() {
             <div>{lang === 'fr' ? 'Paiement' : 'Payment'}: {(r.payment?.method || '').toUpperCase()} — {r.payment?.status}</div>
             <div className="mt-2">{r.cancellationPolicy}</div>
           </div>
-          <div className="mt-6 text-center text-xs text-muted-foreground border-t pt-4">YABISO HOTELS — AFRICA BOOKS WITH CONFIDENCE — support@yabiso.com · +243 99 000 0000</div>
+          <div className="mt-6 text-center text-xs text-muted-foreground border-t pt-4">YABISO HOTELS — AFRICA BOOKS WITH CONFIDENCE — support@yabiso.com · +243 802 720 788</div>
         </Card>
       </main>
     )
@@ -2634,7 +2634,7 @@ function App() {
         </div>
         <div>
           <div className="font-semibold mb-3 text-sm">Support</div>
-          <a href="https://wa.me/243990000000" target="_blank" rel="noreferrer"><Button variant="outline" size="sm" className="gap-2 border-green-500 text-green-600"><Phone className="h-4 w-4" />WhatsApp</Button></a>
+          <a href="https://wa.me/243802720788" target="_blank" rel="noreferrer"><Button variant="outline" size="sm" className="gap-2 border-green-500 text-green-600"><Phone className="h-4 w-4" />WhatsApp</Button></a>
         </div>
       </div>
       <div className="border-t py-5 text-center text-xs text-muted-foreground space-y-1">
@@ -2730,12 +2730,22 @@ function App() {
       {EcosystemBanner()}
       <Footer />
 
+      {/* Floating WhatsApp contact */}
+      <a
+        href={`https://wa.me/243802720788?text=${encodeURIComponent(lang === 'fr' ? 'Bonjour YABISO HOTELS, je souhaite plus d\'informations.' : 'Hello YABISO HOTELS, I would like more information.')}`}
+        target="_blank" rel="noreferrer" aria-label="WhatsApp"
+        className="fixed left-4 bottom-20 md:bottom-6 z-[60] h-13 w-13 md:h-14 md:w-14 rounded-full bg-[#25D366] text-white shadow-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+        style={{ height: '3.25rem', width: '3.25rem' }}
+      >
+        <MessageCircle className="h-6 w-6 fill-white" />
+      </a>
+
       {/* Mobile bottom navigation (mobile-first) */}
       <div className="h-16 md:hidden" aria-hidden />
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background/95 backdrop-blur border-t border-border shadow-[0_-2px_10px_rgba(0,0,0,0.06)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="grid grid-cols-4">
           {[
-            { key: 'home', icon: Home, label: lang === 'fr' ? 'Accueil' : 'Home', on: () => { goto('home'); loadHotels() } },
+            { key: 'home', icon: HomeIcon, label: lang === 'fr' ? 'Accueil' : 'Home', on: () => { goto('home'); loadHotels() } },
             { key: 'search', icon: Search, label: lang === 'fr' ? 'Recherche' : 'Search', on: () => { goto('search'); loadHotels() } },
             { key: 'bookings', icon: CalendarCheck, label: lang === 'fr' ? 'Réservations' : 'Bookings', on: () => { user ? goto('account') : setAuthOpen(true) }, match: 'account' },
             { key: 'account', icon: User, label: lang === 'fr' ? 'Compte' : 'Account', on: () => { user ? goto('account') : setAuthOpen(true) } },

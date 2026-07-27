@@ -237,6 +237,16 @@ function resizeImage(file) {
 }
 const fmtCDF = (n) => (n || 0).toLocaleString('fr-FR') + ' FC'
 
+// Mobile data saver: shrink Google-proxy hotel photos for thumbnails/cards
+const thumb = (url, w = 600) => {
+  if (typeof url !== 'string') return url
+  if (url.includes('/api/hotel-photo')) return url.replace(/([?&])w=\d+/, `$1w=${w}`)
+  return url
+}
+// Graceful fallback for broken/expired images (esp. expired Google Places photos)
+const IMG_FALLBACK = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=70&w=600'
+const onImgError = (e) => { if (e.currentTarget.src !== IMG_FALLBACK) e.currentTarget.src = IMG_FALLBACK }
+
 /* ----------------------------- Agent Module ----------------------------- */
 function AgentModule({ lang, onBack }) {
   const at = (k) => AT[lang][k]
@@ -1761,7 +1771,7 @@ function App() {
   const HotelCard = ({ h }) => (
     <Card className="group overflow-hidden border hover:shadow-xl transition-all duration-300 cursor-pointer" onClick={() => openHotel(h.id)}>
       <div className="relative h-52 overflow-hidden">
-        <img src={h.images[0]} alt={h.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <img src={thumb(h.images[0], 600)} alt={h.name} loading="lazy" decoding="async" onError={onImgError} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute top-3 left-3 flex gap-2">
           {h.category && CAT_LABELS[lang][h.category] && <Badge className="bg-[#F5A623] text-black hover:bg-[#F5A623] border-0 font-semibold">{CAT_LABELS[lang][h.category]}</Badge>}
           {h.verified && <Badge className="bg-[#0A1F5C] text-white gap-1 hover:bg-[#0A1F5C]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
@@ -2719,6 +2729,28 @@ function App() {
       )}
       {EcosystemBanner()}
       <Footer />
+
+      {/* Mobile bottom navigation (mobile-first) */}
+      <div className="h-16 md:hidden" aria-hidden />
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background/95 backdrop-blur border-t border-border shadow-[0_-2px_10px_rgba(0,0,0,0.06)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="grid grid-cols-4">
+          {[
+            { key: 'home', icon: Home, label: lang === 'fr' ? 'Accueil' : 'Home', on: () => { goto('home'); loadHotels() } },
+            { key: 'search', icon: Search, label: lang === 'fr' ? 'Recherche' : 'Search', on: () => { goto('search'); loadHotels() } },
+            { key: 'bookings', icon: CalendarCheck, label: lang === 'fr' ? 'Réservations' : 'Bookings', on: () => { user ? goto('account') : setAuthOpen(true) }, match: 'account' },
+            { key: 'account', icon: User, label: lang === 'fr' ? 'Compte' : 'Account', on: () => { user ? goto('account') : setAuthOpen(true) } },
+          ].map((it) => {
+            const Ic = it.icon
+            const active = view === (it.match || it.key)
+            return (
+              <button key={it.key} onClick={it.on} aria-label={it.label} className={`flex flex-col items-center justify-center gap-0.5 h-16 min-h-[44px] text-[11px] font-semibold transition-colors ${active ? 'text-primary' : 'text-muted-foreground'}`}>
+                <Ic className="h-5 w-5" />
+                {it.label}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }

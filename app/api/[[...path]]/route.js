@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import IMPORTED_HOTELS from './importedHotels.json'
 import { ICON_192, ICON_512 } from '../../pwaIcons'
 import { LOGO_B64, BANNER_B64 } from '../../brandAssets'
+import { galleryFor } from '../../hotelImages'
 
 // ---------------- Auth helpers (simple JWT-like HMAC) ----------------
 const AUTH_SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex')
@@ -401,6 +402,7 @@ async function seed(db) {
     await assignCategoriesV1(db)
     await seedServicesV1(db)
     await assignSlugBrandingV1(db)
+    await assignRealImagesV3(db)
     return { seeded: false, hotels: await db.collection('hotels').countDocuments() }
   }
   const hotels = buildHotels()
@@ -417,6 +419,7 @@ async function seed(db) {
   await getSettings(db)
   await seedImportedHotels(db)
   await assignSlugBrandingV1(db)
+  await assignRealImagesV3(db)
   return { seeded: true, hotels: hotels.length, reviews: reviews.length }
 }
 
@@ -499,6 +502,24 @@ async function assignSlugBrandingV1(db) {
     await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', assignSlugBrandingV1: true } }, { upsert: true })
     if (hotels.length) console.log('[migrate] assignSlugBrandingV1 set slug/branding on', hotels.length, 'hotels')
   } catch (e) { console.error('[migrate] assignSlugBrandingV1 failed', e?.message || e) }
+}
+async function assignRealImagesV3(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.assignRealImagesV3) return
+    const hotels = await db.collection('hotels').find({ $or: [
+      { images: { $elemMatch: { $regex: '/api/hotel-photo' } } },
+      { images: { $elemMatch: { $eq: null } } },
+    ] }).toArray()
+    for (const h of hotels) {
+      const g = galleryFor(h)
+      const set = { images: g }
+      if (h.branding) set['branding.heroImage'] = g[0]
+      await db.collection('hotels').updateOne({ id: h.id }, { $set: set })
+    }
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', assignRealImagesV3: true } }, { upsert: true })
+    if (hotels.length) console.log('[migrate] assignRealImagesV3 fixed images on', hotels.length, 'imported hotels')
+  } catch (e) { console.error('[migrate] assignRealImagesV3 failed', e?.message || e) }
 }
 function normRooms(rooms, fallbackBase) {
   let list = Array.isArray(rooms) ? rooms.filter((r) => r && r.name) : []

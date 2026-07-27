@@ -399,6 +399,7 @@ async function seed(db) {
     await seedImportedHotels(db)
     await assignCategoriesV1(db)
     await seedServicesV1(db)
+    await assignSlugBrandingV1(db)
     return { seeded: false, hotels: await db.collection('hotels').countDocuments() }
   }
   const hotels = buildHotels()
@@ -414,6 +415,7 @@ async function seed(db) {
   await db.collection('reviews').insertMany(reviews)
   await getSettings(db)
   await seedImportedHotels(db)
+  await assignSlugBrandingV1(db)
   return { seeded: true, hotels: hotels.length, reviews: reviews.length }
 }
 
@@ -439,6 +441,63 @@ function genCode(prefix) {
 }
 async function logActivity(db, agentId, type, detail, meta = {}) {
   await db.collection('activities').insertOne({ id: uuidv4(), agentId, type, detail, meta, createdAt: new Date() })
+}
+function slugify(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+async function uniqueSlug(db, base, excludeId) {
+  let slug = base || 'hotel'
+  let i = 1
+  // ensure uniqueness across hotels
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const found = await db.collection('hotels').findOne({ slug })
+    if (!found || found.id === excludeId) return slug
+    i++
+    slug = `${base}-${i}`
+  }
+}
+function defaultBranding(hotel = {}) {
+  return {
+    logo: '',
+    primaryColor: '#0A1F5C',
+    secondaryColor: '#F5A623',
+    accentColor: '#F5A623',
+    font: 'Inter',
+    tagline: hotel.name ? `Bienvenue à ${hotel.name}` : 'Réservez votre séjour',
+    heroImage: (hotel.images && hotel.images[0]) || '',
+    contactPhone: '',
+    contactEmail: '',
+    contactAddress: [hotel.city, hotel.country].filter(Boolean).join(', '),
+    policies: '',
+    poweredBy: true,
+  }
+}
+function sanitizeBranding(input = {}, current = {}) {
+  const base = { ...defaultBranding(), ...current }
+  const out = { ...base }
+  const strFields = ['logo', 'font', 'tagline', 'heroImage', 'contactPhone', 'contactEmail', 'contactAddress', 'policies']
+  for (const f of strFields) if (typeof input[f] === 'string') out[f] = input[f].slice(0, 20000)
+  const colorFields = ['primaryColor', 'secondaryColor', 'accentColor']
+  for (const f of colorFields) if (typeof input[f] === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(input[f])) out[f] = input[f]
+  if (typeof input.poweredBy === 'boolean') out.poweredBy = input.poweredBy
+  return out
+}
+async function assignSlugBrandingV1(db) {
+  try {
+    const flag = await db.collection('settings').findOne({ id: 'migrations' })
+    if (flag && flag.assignSlugBrandingV1) return
+    const hotels = await db.collection('hotels').find({ $or: [{ slug: { $exists: false } }, { branding: { $exists: false } }] }).toArray()
+    for (const h of hotels) {
+      const set = {}
+      if (!h.slug) set.slug = await uniqueSlug(db, slugify(`${h.name}-${h.city}`) || slugify(h.name) || 'hotel', h.id)
+      if (!h.branding) set.branding = defaultBranding(h)
+      if (h.tenantId === undefined) set.tenantId = h.ownerId || null
+      if (Object.keys(set).length) await db.collection('hotels').updateOne({ id: h.id }, { $set: set })
+    }
+    await db.collection('settings').updateOne({ id: 'migrations' }, { $set: { id: 'migrations', assignSlugBrandingV1: true } }, { upsert: true })
+    if (hotels.length) console.log('[migrate] assignSlugBrandingV1 set slug/branding on', hotels.length, 'hotels')
+  } catch (e) { console.error('[migrate] assignSlugBrandingV1 failed', e?.message || e) }
 }
 function normRooms(rooms, fallbackBase) {
   let list = Array.isArray(rooms) ? rooms.filter((r) => r && r.name) : []
@@ -725,16 +784,35 @@ async function handleRoute(request, { params }) {
         const rms = normRooms(body.rooms, parseInt(body.priceCDF))
         const minPrice = Math.min(...rms.map((r) => r.priceCDF))
         const images = Array.isArray(body.images) && body.images.length ? body.images : ['https://images.unsplash.com/photo-1566073771259-6a8506099945?crop=entropy&cs=srgb&fm=jpg&q=85&w=900']
+        const hid = uuidv4()
+        const slug = await uniqueSlug(db, slugify(`${body.name}-${body.city}`) || slugify(body.name) || 'hotel', hid)
         const hotel = {
-          id: uuidv4(), name: body.name, type: body.type || 'hotel', city: body.city, province: body.province, country: body.country,
+          id: hid, name: body.name, type: body.type || 'hotel', city: body.city, province: body.province, country: body.country,
           region: body.region || 'Afrique Centrale', priceCDF: minPrice, verified: false, featured: false, active: true,
           lat: parseFloat(body.lat) || 0, lng: parseFloat(body.lng) || 0,
           images, description: body.description || '', descriptionEn: body.descriptionEn || body.description || '',
           amenities: Array.isArray(body.amenities) ? body.amenities : [], rooms: rms,
-          rating: 0, reviewCount: 0, ownerId: u.id, ownerName: u.name, createdAt: new Date(),
+          rating: 0, reviewCount: 0, ownerId: u.id, tenantId: u.id, ownerName: u.name,
+          slug, branding: sanitizeBranding(body.branding || {}, defaultBranding({ name: body.name, city: body.city, country: body.country, images })),
+          createdAt: new Date(),
         }
         await db.collection('hotels').insertOne({ ...hotel })
         return handleCORS(NextResponse.json(hotel))
+      }
+      if (path[1] === 'hotels' && path[2] && path[3] === 'branding' && method === 'PUT') {
+        const hotel = await db.collection('hotels').findOne({ id: path[2] })
+        if (!hotel || hotel.ownerId !== u.id) return handleCORS(NextResponse.json({ error: 'Not found or not owner' }, { status: 404 }))
+        const body = await request.json()
+        const upd = {}
+        upd.branding = sanitizeBranding(body.branding || body || {}, { ...defaultBranding(hotel), ...(hotel.branding || {}) })
+        // optional slug change (keep unique)
+        if (typeof body.slug === 'string' && body.slug.trim()) {
+          const desired = slugify(body.slug)
+          if (desired && desired !== hotel.slug) upd.slug = await uniqueSlug(db, desired, hotel.id)
+        }
+        await db.collection('hotels').updateOne({ id: path[2] }, { $set: upd })
+        const updated = await db.collection('hotels').findOne({ id: path[2] })
+        return handleCORS(NextResponse.json((({ _id, ...r }) => r)(updated)))
       }
       if (path[1] === 'hotels' && path[2] && method === 'PUT') {
         const hotel = await db.collection('hotels').findOne({ id: path[2] })
@@ -802,6 +880,17 @@ async function handleRoute(request, { params }) {
       if (category) hotels = hotels.filter((h) => (h.category || categoryFromType(h.type)) === category)
       if (guests) hotels = hotels.filter((h) => h.rooms.some((r) => r.capacity >= guests))
       return handleCORS(NextResponse.json(clean(hotels)))
+    }
+
+    // ---------------- White-label tenant microsite (public) ----------------
+    if (path[0] === 'tenant' && path[1] && method === 'GET') {
+      const hotel = await db.collection('hotels').findOne({ slug: path[1] })
+      if (!hotel || hotel.active === false) return handleCORS(NextResponse.json({ error: 'Site introuvable' }, { status: 404 }))
+      const reviews = await db.collection('reviews').find({ hotelId: hotel.id }).sort({ createdAt: -1 }).limit(20).toArray()
+      const settings = await getSettings(db)
+      const { _id, ownerId, tenantId, agentId, ...rest } = hotel
+      const branding = { ...defaultBranding(hotel), ...(hotel.branding || {}) }
+      return handleCORS(NextResponse.json({ hotel: { ...rest, branding }, reviews: clean(reviews), rates: settings.rates, fee: settings.fee }))
     }
 
     // Single hotel

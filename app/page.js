@@ -24,7 +24,7 @@ import {
   Plus, Trash2, Camera, Locate, ClipboardList, LayoutDashboard, LogOut, Activity, Image as ImageIcon, Loader2, UserCog,
   User, LogIn, Shield, Settings as SettingsIcon, BarChart3, Wallet, CalendarCheck, Gift, Megaphone, PartyPopper,
   Home, BedDouble, Compass, Bus, KeyRound, Volume2, VolumeX, Briefcase, ExternalLink, ChevronRight,
-  SlidersHorizontal, RotateCcw, ArrowDownUp,
+  SlidersHorizontal, RotateCcw, ArrowDownUp, Palette, Copy,
 } from 'lucide-react'
 
 /* ----------------------------- i18n ----------------------------- */
@@ -432,7 +432,7 @@ function AgentPropertyCard({ h, lang, at, typeLabel, onVerify, onRoomAdded, agen
               <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{h.city}, {h.province}</div>
             </div>
             {h.verified
-              ? <Badge className="bg-[#0057B8] text-white gap-1 hover:bg-[#0057B8] shrink-0"><BadgeCheck className="h-3 w-3" />{at('verified')}</Badge>
+              ? <Badge className="bg-[#0A1F5C] text-white gap-1 hover:bg-[#0A1F5C] shrink-0"><BadgeCheck className="h-3 w-3" />{at('verified')}</Badge>
               : <Badge variant="outline" className="shrink-0 text-muted-foreground">{at('not_verified')}</Badge>}
           </div>
           <div className="text-xs text-muted-foreground mt-2">{typeLabel(h.type)} · {h.rooms?.length || 0} {at('rooms').toLowerCase()} · {fmtCDF(h.priceCDF)}</div>
@@ -913,7 +913,7 @@ function AdminDashboard({ lang, token, onBack }) {
               <Card key={h.id} className="p-3 border flex items-center gap-3">
                 <img src={h.images[0]} alt="" className="h-12 w-12 rounded object-cover" />
                 <div className="flex-1 min-w-0"><div className="font-semibold truncate">{h.name}</div><div className="text-xs text-muted-foreground">{h.city} · {fmtCDF(h.priceCDF)} {h.source === 'google_places' ? '· Google' : ''}</div></div>
-                {h.verified && <Badge className="bg-[#0057B8] text-white hover:bg-[#0057B8] text-xs gap-1"><BadgeCheck className="h-3 w-3" />Vérifié</Badge>}
+                {h.verified && <Badge className="bg-[#0A1F5C] text-white hover:bg-[#0A1F5C] text-xs gap-1"><BadgeCheck className="h-3 w-3" />Vérifié</Badge>}
                 <Button size="sm" variant={h.featured ? 'default' : 'outline'} onClick={() => toggleFeature(h)} className="gap-1"><Star className="h-3.5 w-3.5" />{h.featured ? 'Vedette' : 'Mettre'}</Button>
                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => delHotel(h)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </Card>
@@ -1109,6 +1109,146 @@ function OwnerHotelForm({ lang, token, onCreated }) {
   )
 }
 
+function OwnerBrandingEditor({ lang, token, hotels, onSaved }) {
+  const [sel, setSel] = useState('')
+  const [b, setB] = useState(null)
+  const [slug, setSlug] = useState('')
+  const [saving, setSaving] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const L = (fr, en) => (lang === 'fr' ? fr : en)
+
+  useEffect(() => {
+    if (!sel && hotels && hotels.length) setSel(hotels[0].id)
+  }, [hotels])
+
+  useEffect(() => {
+    const h = (hotels || []).find((x) => x.id === sel)
+    if (h) {
+      setB({
+        logo: h.branding?.logo || '', primaryColor: h.branding?.primaryColor || '#0A1F5C', secondaryColor: h.branding?.secondaryColor || '#F5A623',
+        tagline: h.branding?.tagline || '', heroImage: h.branding?.heroImage || (h.images && h.images[0]) || '',
+        contactPhone: h.branding?.contactPhone || '', contactEmail: h.branding?.contactEmail || '', contactAddress: h.branding?.contactAddress || '',
+        policies: h.branding?.policies || '', poweredBy: h.branding?.poweredBy !== false,
+      })
+      setSlug(h.slug || '')
+    }
+  }, [sel, hotels])
+
+  const set = (k, v) => setB((prev) => ({ ...prev, [k]: v }))
+  const onLogo = (e) => {
+    const f = e.target.files?.[0]; if (!f) return
+    const reader = new FileReader(); reader.onload = () => set('logo', reader.result); reader.readAsDataURL(f)
+  }
+
+  const save = async () => {
+    if (!sel || !b) return
+    setSaving(true)
+    try {
+      const r = await fetch('/api/owner/hotels/' + sel + '/branding', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ branding: b, slug }),
+      })
+      if (!r.ok) throw new Error('save failed')
+      toast.success(L('Site web mis à jour', 'Website updated'))
+      onSaved && onSaved()
+    } catch (e) { toast.error(L('Erreur lors de la sauvegarde', 'Save error')) }
+    setSaving(false)
+  }
+
+  if (!hotels || hotels.length === 0) return <div className="py-16 text-center text-muted-foreground">{L("Ajoutez d'abord un hôtel pour personnaliser son site web.", 'Add a hotel first to customize its website.')}</div>
+  if (!b) return null
+  const siteUrl = `${origin}/h/${slug}`
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 space-y-5">
+        <Card className="p-5 border space-y-4">
+          <div>
+            <Label className="text-sm font-semibold">{L('Hôtel à personnaliser', 'Hotel to customize')}</Label>
+            <Select value={sel} onValueChange={setSel}>
+              <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+              <SelectContent>{hotels.map((h) => <SelectItem key={h.id} value={h.id}>{h.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-lg bg-muted/50 border p-3 flex items-center gap-2 flex-wrap">
+            <Globe className="h-4 w-4 text-primary shrink-0" />
+            <span className="text-sm font-mono truncate flex-1 min-w-[160px]">{siteUrl}</span>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => { navigator.clipboard?.writeText(siteUrl); toast.success(L('Lien copié', 'Link copied')) }}><Copy className="h-3.5 w-3.5" />{L('Copier', 'Copy')}</Button>
+            <a href={siteUrl} target="_blank" rel="noreferrer"><Button size="sm" className="gap-1"><ExternalLink className="h-3.5 w-3.5" />{L('Ouvrir', 'Open')}</Button></a>
+          </div>
+        </Card>
+
+        <Card className="p-5 border space-y-4">
+          <h3 className="font-bold flex items-center gap-2"><Palette className="h-4 w-4 text-primary" />{L('Identité visuelle', 'Brand identity')}</h3>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm">{L('Adresse du site (slug)', 'Site address (slug)')}</Label>
+              <Input className="mt-1" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="mon-hotel" />
+            </div>
+            <div>
+              <Label className="text-sm">{L('Slogan / Titre héro', 'Tagline / Hero title')}</Label>
+              <Input className="mt-1" value={b.tagline} onChange={(e) => set('tagline', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm">{L('Couleur principale', 'Primary color')}</Label>
+              <div className="flex items-center gap-2 mt-1"><input type="color" value={b.primaryColor} onChange={(e) => set('primaryColor', e.target.value)} className="h-9 w-12 rounded border cursor-pointer" /><Input value={b.primaryColor} onChange={(e) => set('primaryColor', e.target.value)} className="font-mono" /></div>
+            </div>
+            <div>
+              <Label className="text-sm">{L('Couleur secondaire', 'Secondary color')}</Label>
+              <div className="flex items-center gap-2 mt-1"><input type="color" value={b.secondaryColor} onChange={(e) => set('secondaryColor', e.target.value)} className="h-9 w-12 rounded border cursor-pointer" /><Input value={b.secondaryColor} onChange={(e) => set('secondaryColor', e.target.value)} className="font-mono" /></div>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm">{L('Logo (image)', 'Logo (image)')}</Label>
+              <div className="flex items-center gap-3 mt-1">
+                {b.logo && <img src={b.logo} alt="logo" className="h-10 w-10 rounded object-contain border bg-white" />}
+                <Input type="file" accept="image/*" onChange={onLogo} className="text-xs" />
+                {b.logo && <Button size="sm" variant="ghost" onClick={() => set('logo', '')}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm">{L("Image héro (URL)", 'Hero image (URL)')}</Label>
+              <Input className="mt-1" value={b.heroImage} onChange={(e) => set('heroImage', e.target.value)} placeholder="https://..." />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border space-y-4">
+          <h3 className="font-bold">{L('Coordonnées & politiques', 'Contact & policies')}</h3>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div><Label className="text-sm">{L('Téléphone', 'Phone')}</Label><Input className="mt-1" value={b.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} /></div>
+            <div><Label className="text-sm">Email</Label><Input className="mt-1" value={b.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} /></div>
+            <div><Label className="text-sm">{L('Adresse', 'Address')}</Label><Input className="mt-1" value={b.contactAddress} onChange={(e) => set('contactAddress', e.target.value)} /></div>
+          </div>
+          <div><Label className="text-sm">{L('Politiques (annulation, check-in...)', 'Policies (cancellation, check-in...)')}</Label><Textarea className="mt-1" rows={3} value={b.policies} onChange={(e) => set('policies', e.target.value)} /></div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><Checkbox checked={b.poweredBy} onCheckedChange={(v) => set('poweredBy', !!v)} />{L('Afficher « Propulsé par YABISO HOTELS »', 'Show "Powered by YABISO HOTELS"')}</label>
+          <Button onClick={save} disabled={saving} className="gap-1">{saving ? L('Enregistrement...', 'Saving...') : L('Enregistrer le site', 'Save website')}</Button>
+        </Card>
+      </div>
+
+      {/* Live preview */}
+      <div className="lg:col-span-1">
+        <div className="lg:sticky lg:top-24">
+          <div className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wide">{L('Aperçu', 'Preview')}</div>
+          <div className="rounded-2xl border overflow-hidden shadow-sm">
+            <div className="h-12 flex items-center gap-2 px-3 border-b bg-white">
+              {b.logo ? <img src={b.logo} alt="" className="h-7 w-auto object-contain" /> : <div className="h-7 w-7 rounded flex items-center justify-center text-white text-xs font-bold" style={{ background: b.primaryColor }}>{(hotels.find((h) => h.id === sel)?.name || 'H').charAt(0)}</div>}
+              <span className="font-bold text-sm truncate" style={{ color: b.primaryColor }}>{hotels.find((h) => h.id === sel)?.name}</span>
+            </div>
+            <div className="relative p-5 text-white min-h-[150px] flex flex-col justify-end" style={{ background: b.heroImage ? `linear-gradient(135deg, ${b.primaryColor}dd, ${b.primaryColor}dd), url(${b.heroImage}) center/cover` : `linear-gradient(135deg, ${b.primaryColor}, ${b.primaryColor}dd)` }}>
+              <div className="text-sm font-extrabold leading-tight">{b.tagline || hotels.find((h) => h.id === sel)?.name}</div>
+              <span className="mt-3 inline-block self-start rounded px-3 py-1.5 text-xs font-bold" style={{ background: b.secondaryColor, color: '#1a1a1a' }}>{L('Réserver', 'Book')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function OwnerDashboard({ lang, token, user, onBack }) {
   const [tab, setTab] = useState('overview')
   const [stats, setStats] = useState({ properties: 0, rooms: 0, bookings: 0, pending: 0, payoutCDF: 0, revenueCDF: 0 })
@@ -1136,6 +1276,7 @@ function OwnerDashboard({ lang, token, user, onBack }) {
           <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-4 w-4" />{lang === 'fr' ? "Vue d'ensemble" : 'Overview'}</TabsTrigger>
           <TabsTrigger value="hotels" className="gap-1"><Building2 className="h-4 w-4" />{lang === 'fr' ? 'Mes hôtels' : 'My hotels'}</TabsTrigger>
           <TabsTrigger value="add" className="gap-1"><Plus className="h-4 w-4" />{lang === 'fr' ? 'Ajouter' : 'Add'}</TabsTrigger>
+          <TabsTrigger value="branding" className="gap-1"><Palette className="h-4 w-4" />{lang === 'fr' ? 'Site web' : 'Website'}</TabsTrigger>
           <TabsTrigger value="bookings" className="gap-1"><CalendarCheck className="h-4 w-4" />{lang === 'fr' ? 'Réservations' : 'Bookings'}</TabsTrigger>
         </TabsList>
 
@@ -1165,7 +1306,7 @@ function OwnerDashboard({ lang, token, user, onBack }) {
                     <div className="flex-1 min-w-0">
                       <div className="font-bold truncate">{h.name}</div>
                       <div className="text-xs text-muted-foreground">{h.city}, {h.province} · {h.rooms?.length || 0} {lang === 'fr' ? 'chambres' : 'rooms'} · {fmtCDF(h.priceCDF)}</div>
-                      <div className="flex gap-2 mt-1">{h.verified ? <Badge className="bg-[#0057B8] text-white hover:bg-[#0057B8] text-xs gap-1"><BadgeCheck className="h-3 w-3" />{lang === 'fr' ? 'Vérifié' : 'Verified'}</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">{lang === 'fr' ? 'En attente de vérification' : 'Pending verification'}</Badge>}<Badge variant={h.active !== false ? 'secondary' : 'outline'} className="text-xs">{h.active !== false ? (lang === 'fr' ? 'Actif' : 'Active') : (lang === 'fr' ? 'Inactif' : 'Inactive')}</Badge></div>
+                      <div className="flex gap-2 mt-1">{h.verified ? <Badge className="bg-[#0A1F5C] text-white hover:bg-[#0A1F5C] text-xs gap-1"><BadgeCheck className="h-3 w-3" />{lang === 'fr' ? 'Vérifié' : 'Verified'}</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">{lang === 'fr' ? 'En attente de vérification' : 'Pending verification'}</Badge>}<Badge variant={h.active !== false ? 'secondary' : 'outline'} className="text-xs">{h.active !== false ? (lang === 'fr' ? 'Actif' : 'Active') : (lang === 'fr' ? 'Inactif' : 'Inactive')}</Badge></div>
                     </div>
                     <Button size="sm" variant="outline" onClick={() => toggleActive(h)}>{h.active !== false ? (lang === 'fr' ? 'Désactiver' : 'Deactivate') : (lang === 'fr' ? 'Activer' : 'Activate')}</Button>
                   </div>
@@ -1182,6 +1323,10 @@ function OwnerDashboard({ lang, token, user, onBack }) {
 
         <TabsContent value="add">
           <OwnerHotelForm lang={lang} token={token} onCreated={() => { refresh(); setTab('hotels') }} />
+        </TabsContent>
+
+        <TabsContent value="branding">
+          <OwnerBrandingEditor lang={lang} token={token} hotels={hotels} onSaved={refresh} />
         </TabsContent>
 
         <TabsContent value="bookings">
@@ -1208,7 +1353,7 @@ function AnnouncementBar({ lang, onPartner }) {
   if (!open) return null
   const close = () => { setOpen(false); try { localStorage.setItem('yabiso_promo_off', '1') } catch (e) {} }
   return (
-    <div className="relative bg-gradient-to-r from-[#CE1126] via-[#0057B8] to-[#0057B8] text-white">
+    <div className="relative bg-gradient-to-r from-[#CE1126] via-[#0A1F5C] to-[#0A1F5C] text-white">
       <div className="container flex items-center justify-center gap-3 py-2 text-sm font-medium text-center">
         <PartyPopper className="h-4 w-4 text-[#F4B400] shrink-0" />
         <span className="truncate sm:whitespace-normal">
@@ -1318,6 +1463,15 @@ function App() {
         const sr = await fetch('/api/settings/rates'); const s = await sr.json()
         if (s.rates) setRates(s.rates); if (typeof s.fee === 'number') setFee(s.fee)
         await loadHotels()
+        // Deep-link from white-label microsite: /?hotel=<id>
+        try {
+          const hid = new URLSearchParams(window.location.search).get('hotel')
+          if (hid) {
+            goto('hotel'); setSelected(null)
+            const rr = await fetch('/api/hotels/' + hid); setSelected(await rr.json())
+            window.history.replaceState({}, '', window.location.pathname)
+          }
+        } catch (e) {}
       } catch (e) { console.error(e) }
     })()
   }, [loadHotels])
@@ -1611,7 +1765,7 @@ function App() {
         <img src={h.images[0]} alt={h.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute top-3 left-3 flex gap-2">
           {h.category && CAT_LABELS[lang][h.category] && <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] border-0 font-semibold">{CAT_LABELS[lang][h.category]}</Badge>}
-          {h.verified && <Badge className="bg-[#0057B8] text-white gap-1 hover:bg-[#0057B8]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
+          {h.verified && <Badge className="bg-[#0A1F5C] text-white gap-1 hover:bg-[#0A1F5C]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
         </div>
         <button onClick={(e) => { e.stopPropagation(); toggleFav(h.id) }} className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/90 grid place-items-center hover:scale-110 transition">
           <Heart className={`h-4 w-4 ${favorites.includes(h.id) ? 'fill-[#CE1126] text-[#CE1126]' : 'text-foreground'}`} />
@@ -1666,7 +1820,7 @@ function App() {
       <section className="relative">
         <div className="absolute inset-0">
           <img src="https://images.unsplash.com/photo-1779617442298-d912b57a841c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwyfHxBZnJpY2FuJTIwaG90ZWwlMjByZXNvcnR8ZW58MHx8fHwxNzgyMzM3MDgyfDA&ixlib=rb-4.1.0&q=85" alt="Afrique" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0a2a52]/90 via-[#0057B8]/70 to-[#0057B8]/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0a2a52]/90 via-[#0A1F5C]/70 to-[#0A1F5C]/30" />
         </div>
         <div className="relative container py-20 md:py-28">
           <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] mb-4 font-semibold">Réservez • Séjournez • Découvrez l'Afrique</Badge>
@@ -1763,7 +1917,7 @@ function App() {
 
       {/* Promo banner: 2 months free */}
       <section className="container py-6">
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0057B8] via-[#0057B8] to-[#003a7a] text-white p-8 md:p-10">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0A1F5C] via-[#0A1F5C] to-[#003a7a] text-white p-8 md:p-10">
           <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#F4B400]/20 blur-2xl" />
           <div className="absolute right-6 top-6 hidden md:block"><Gift className="h-24 w-24 text-[#F4B400]/30" /></div>
           <Badge className="bg-[#F4B400] text-black hover:bg-[#F4B400] font-bold mb-3 gap-1"><PartyPopper className="h-3.5 w-3.5" />{lang === 'fr' ? 'Offre de lancement' : 'Launch offer'}</Badge>
@@ -1783,7 +1937,7 @@ function App() {
 
       {/* Partner CTA */}
       <section className="container py-16">
-        <div className="rounded-2xl bg-gradient-to-r from-[#0057B8] to-[#003a7a] text-white p-10 md:p-14 text-center">
+        <div className="rounded-2xl bg-gradient-to-r from-[#0A1F5C] to-[#003a7a] text-white p-10 md:p-14 text-center">
           <h2 className="text-3xl font-extrabold">{t('partner_title')}</h2>
           <p className="mt-3 max-w-2xl mx-auto text-white/90">{t('partner_sub')}</p>
           <Button onClick={() => goto('partner')} className="mt-6 bg-[#F4B400] text-black hover:bg-[#d99f00] font-semibold gap-2">{t('partner_cta')}<ArrowRight className="h-4 w-4" /></Button>
@@ -1981,7 +2135,7 @@ function App() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-extrabold">{h.name}</h1>
-              {h.verified && <Badge className="bg-[#0057B8] text-white gap-1 hover:bg-[#0057B8]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
+              {h.verified && <Badge className="bg-[#0A1F5C] text-white gap-1 hover:bg-[#0A1F5C]"><BadgeCheck className="h-3 w-3" />{t('verified')}</Badge>}
             </div>
             <p className="text-muted-foreground flex items-center gap-1 mt-1"><MapPin className="h-4 w-4" />{h.city}, {h.province}, {h.country}</p>
           </div>
@@ -2381,7 +2535,7 @@ function App() {
   /* ----------------------------- Footer ----------------------------- */
   const EcosystemBanner = () => (
     <section className="container py-10">
-      <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-[#0057B8] via-[#0a4aa0] to-[#052a63] text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-[#0A1F5C] via-[#0a4aa0] to-[#052a63] text-white shadow-xl">
         <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-[#F4B400]/20 blur-2xl" />
         <div className="absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-[#E4002B]/20 blur-2xl" />
         <div className="relative p-6 sm:p-10 grid lg:grid-cols-2 gap-8 items-center">
@@ -2406,11 +2560,11 @@ function App() {
           </div>
           <div className="rounded-2xl bg-white text-foreground p-5 sm:p-6 shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#0057B8] to-[#E4002B] flex items-center justify-center text-white shrink-0">
+              <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[#0A1F5C] to-[#E4002B] flex items-center justify-center text-white shrink-0">
                 <Building2 className="h-6 w-6" />
               </div>
               <div>
-                <div className="font-extrabold text-lg leading-none">YABISO <span className="text-[#0057B8]">Hotels</span></div>
+                <div className="font-extrabold text-lg leading-none">YABISO <span className="text-[#0A1F5C]">Hotels</span></div>
                 <div className="text-xs text-muted-foreground mt-1">{lang === 'fr' ? 'Réservation d\u2019hôtels & voyage en Afrique' : 'Hotel booking & travel in Africa'}</div>
               </div>
             </div>
@@ -2428,7 +2582,7 @@ function App() {
               ))}
             </div>
             <button onClick={() => { setCategory(''); loadHotels({}); goto('search') }} className="mt-5 block w-full">
-              <span className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0057B8] hover:bg-[#004a9e] text-white h-10 font-medium text-sm transition">
+              <span className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0A1F5C] hover:bg-[#004a9e] text-white h-10 font-medium text-sm transition">
                 {lang === 'fr' ? 'Réserver maintenant' : 'Book now'}<ChevronRight className="h-4 w-4" />
               </span>
             </button>

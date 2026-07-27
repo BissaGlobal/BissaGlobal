@@ -11,7 +11,7 @@ export default function ProvincesIndex() {
   return (
     <main style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 20px', fontFamily: 'Inter, system-ui, sans-serif' }}>
       <nav style={{ marginBottom: 24 }}>
-        <Link href="/" style={{ color: '#0057B8', textDecoration: 'none', fontWeight: 600 }}>← YABISO HOTELS</Link>
+        <Link href="/" style={{ color: '#0A1F5C', textDecoration: 'none', fontWeight: 600 }}>← YABISO HOTELS</Link>
       </nav>
       <h1 style={{ fontSize: 36, fontWeight: 800, margin: '0 0 8px' }}>Hôtels en République démocratique du Congo</h1>
       <p style={{ color: '#555', fontSize: 18, marginBottom: 28 }}>Explorez les hôtels, appartements et hébergements vérifiés dans les <strong>26 provinces</strong> de la RDC.</p>
@@ -19,7 +19,7 @@ export default function ProvincesIndex() {
         {DRC_PROVINCES.map((p) => (
           <Link key={p} href={'/rdc/' + slugify(p)} style={{ display: 'block', padding: '16px 18px', border: '1px solid #e5e7eb', borderRadius: 12, textDecoration: 'none', color: '#0f172a', background: '#fff', fontWeight: 600 }}>
             {p}
-            <div style={{ color: '#0057B8', fontSize: 13, fontWeight: 500, marginTop: 4 }}>Voir les hôtels →</div>
+            <div style={{ color: '#0A1F5C', fontSize: 13, fontWeight: 500, marginTop: 4 }}>Voir les hôtels →</div>
           </Link>
         ))}
       </div>
